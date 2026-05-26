@@ -269,9 +269,47 @@ h2 {
   grid-template-columns: 1fr minmax(280px, 360px);
 }
 
+.auth-loading-panel {
+  grid-template-columns: 1fr;
+}
+
 .auth-form {
   display: grid;
   gap: 12px;
+}
+
+.auth-switch {
+  background: #e8e1ce;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: inline-grid;
+  gap: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 18px;
+  padding: 4px;
+}
+
+.auth-switch button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--foreground);
+  cursor: pointer;
+  font-weight: 900;
+  min-height: 36px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.auth-switch button.active {
+  background: var(--panel);
+  box-shadow: 0 1px 4px rgba(39, 39, 42, 0.12);
+}
+
+.auth-form-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .auth-form label {
@@ -287,7 +325,8 @@ h2 {
   text-transform: uppercase;
 }
 
-.auth-form input {
+.auth-form input,
+.auth-form select {
   background: #f8f3e4;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -819,6 +858,11 @@ h2 {
   }
 
   .trip-form {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-form-grid,
+  .auth-switch {
     grid-template-columns: 1fr;
   }
 

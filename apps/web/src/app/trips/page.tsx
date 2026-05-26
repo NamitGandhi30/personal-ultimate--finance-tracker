@@ -32,7 +32,7 @@ type TripForm = {
 
 export default function TripsPage() {
   const auth = useAuth();
-  const { token, username, login, logout, authFetch } = auth;
+  const { token, username, sessionReady, login, register, logout, authFetch } = auth;
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [tripForm, setTripForm] = useState<TripForm>({
@@ -108,7 +108,14 @@ export default function TripsPage() {
   }
 
   return (
-    <AuthGate token={token} username={username} onLogin={login} onLogout={logout}>
+    <AuthGate
+      token={token}
+      username={username}
+      sessionReady={sessionReady}
+      onLogin={login}
+      onRegister={register}
+      onLogout={logout}
+    >
       <main className="workspace">
       <section className="trip-hero">
         <div>

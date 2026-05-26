@@ -34,7 +34,7 @@ type TotalItem = {
 
 export default function DailyPage() {
   const auth = useAuth();
-  const { token, username, login, logout, authFetch } = auth;
+  const { token, username, sessionReady, login, register, logout, authFetch } = auth;
   const [quickEntry, setQuickEntry] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -143,7 +143,14 @@ export default function DailyPage() {
   }
 
   return (
-    <AuthGate token={token} username={username} onLogin={login} onLogout={logout}>
+    <AuthGate
+      token={token}
+      username={username}
+      sessionReady={sessionReady}
+      onLogin={login}
+      onRegister={register}
+      onLogout={logout}
+    >
       <main className="workspace">
         <section className="trip-hero">
           <div>

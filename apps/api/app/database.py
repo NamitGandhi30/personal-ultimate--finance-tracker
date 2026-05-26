@@ -27,6 +27,7 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     ensure_transaction_trip_link()
+    ensure_owner_links()
 
 
 def ensure_transaction_trip_link() -> None:
@@ -46,6 +47,36 @@ def ensure_transaction_trip_link() -> None:
     with engine.begin() as connection:
         connection.execute(text(add_column_sql))
         connection.execute(text("CREATE INDEX IF NOT EXISTS idx_transactions_trip_id ON transactions (trip_id)"))
+
+
+def ensure_owner_links() -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "users" not in table_names:
+        return
+
+    with engine.begin() as connection:
+        if "transactions" in table_names:
+            columns = {column["name"] for column in inspector.get_columns("transactions")}
+            if "user_id" not in columns:
+                if DATABASE_URL.startswith("sqlite"):
+                    connection.execute(text("ALTER TABLE transactions ADD COLUMN user_id INTEGER"))
+                else:
+                    connection.execute(
+                        text("ALTER TABLE public.transactions ADD COLUMN user_id bigint REFERENCES public.users(id) ON DELETE CASCADE")
+                    )
+                connection.execute(text("CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions (user_id)"))
+
+        if "trips" in table_names:
+            columns = {column["name"] for column in inspector.get_columns("trips")}
+            if "user_id" not in columns:
+                if DATABASE_URL.startswith("sqlite"):
+                    connection.execute(text("ALTER TABLE trips ADD COLUMN user_id INTEGER"))
+                else:
+                    connection.execute(
+                        text("ALTER TABLE public.trips ADD COLUMN user_id bigint REFERENCES public.users(id) ON DELETE CASCADE")
+                    )
+                connection.execute(text("CREATE INDEX IF NOT EXISTS idx_trips_user_id ON trips (user_id)"))
 
 
 def check_db() -> None:

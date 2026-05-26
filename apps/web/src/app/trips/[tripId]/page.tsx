@@ -30,7 +30,7 @@ type Trip = {
 
 export default function TripPage() {
   const auth = useAuth();
-  const { token, username, login, logout, authFetch } = auth;
+  const { token, username, sessionReady, login, register, logout, authFetch } = auth;
   const params = useParams<{ tripId: string }>();
   const tripId = Number(params.tripId);
   const [quickEntry, setQuickEntry] = useState("");
@@ -156,7 +156,14 @@ export default function TripPage() {
   }
 
   return (
-    <AuthGate token={token} username={username} onLogin={login} onLogout={logout}>
+    <AuthGate
+      token={token}
+      username={username}
+      sessionReady={sessionReady}
+      onLogin={login}
+      onRegister={register}
+      onLogout={logout}
+    >
       <main className="workspace trip-workspace">
       <section className="trip-hero">
         <div>
