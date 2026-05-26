@@ -1,0 +1,48 @@
+:root {
+  --background: #f4f1e8;
+  --foreground: #17211f;
+  --muted: #65706a;
+  --panel: #fffdf6;
+  --line: #ded8c6;
+  --green: #0f766e;
+  --blue: #255e91;
+  --amber: #a45c16;
+  --ink: #17211f;
+}
+
+html {
+  height: 100%;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+}
