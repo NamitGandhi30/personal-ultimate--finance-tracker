@@ -1,6 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { AuthGate, useAuth } from "./auth-client";
+import { EditableTransactionRow, TransactionPayload } from "./transaction-row";
 import "./workspace.css";
 
 type Transaction = {
@@ -11,11 +14,19 @@ type Transaction = {
   merchant: string;
   date: string;
   is_income: boolean;
+  trip_id?: number | null;
 };
 
 type CreateTransaction = Omit<Transaction, "id" | "date">;
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+type Trip = {
+  id: number;
+  name: string;
+  destination: string;
+  budget: number;
+  created_at: string;
+};
+
 const initialSeedDate = "2026-05-26T00:00:00.000Z";
 
 const seedTransactions: Transaction[] = [
@@ -49,24 +60,34 @@ const seedTransactions: Transaction[] = [
 ];
 
 export default function Home() {
+  const auth = useAuth();
+  const { token, username, login, logout, authFetch } = auth;
   const [quickEntry, setQuickEntry] = useState("");
+  const [selectedTripId, setSelectedTripId] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>(seedTransactions);
+  const [trips, setTrips] = useState<Trip[]>([]);
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
 
   useEffect(() => {
-    async function loadTransactions() {
+    if (!token) return;
+
+    async function loadWorkspace() {
       try {
-        const response = await fetch(`${apiBase}/transactions`, { cache: "no-store" });
-        if (!response.ok) throw new Error("API unavailable");
-        setTransactions((await response.json()) as Transaction[]);
+        const [transactionsResponse, tripsResponse] = await Promise.all([
+          authFetch("/transactions", { cache: "no-store" }),
+          authFetch("/trips", { cache: "no-store" }),
+        ]);
+        if (!transactionsResponse.ok || !tripsResponse.ok) throw new Error("API unavailable");
+        setTransactions((await transactionsResponse.json()) as Transaction[]);
+        setTrips((await tripsResponse.json()) as Trip[]);
         setApiStatus("online");
       } catch {
         setApiStatus("offline");
       }
     }
 
-    loadTransactions();
-  }, []);
+    loadWorkspace();
+  }, [token, authFetch]);
 
   const monthSpend = useMemo(
     () => transactions.filter((item) => !item.is_income).reduce((sum, item) => sum + item.amount, 0),
@@ -89,14 +110,38 @@ export default function Home() {
       return totals;
     }, {});
   }, [transactions]);
+  const tripSpendTotals = useMemo(() => {
+    return transactions.reduce<Record<number, number>>((totals, transaction) => {
+      if (transaction.is_income || !transaction.trip_id) return totals;
+      totals[transaction.trip_id] = (totals[transaction.trip_id] ?? 0) + transaction.amount;
+      return totals;
+    }, {});
+  }, [transactions]);
+  const tripNames = useMemo(() => {
+    return trips.reduce<Record<number, string>>((names, trip) => {
+      names[trip.id] = trip.name;
+      return names;
+    }, {});
+  }, [trips]);
+  const generalTransactions = useMemo(() => {
+    return transactions.filter((transaction) => transaction.is_income || !transaction.trip_id);
+  }, [transactions]);
+  const tripSpend = useMemo(() => {
+    return Object.values(tripSpendTotals).reduce((sum, value) => sum + value, 0);
+  }, [tripSpendTotals]);
 
   async function submitQuickEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsed = parseQuickEntry(quickEntry);
     if (!parsed) return;
+    const tripId = selectedTripId ? Number(selectedTripId) : null;
+    const payload: CreateTransaction = {
+      ...parsed,
+      trip_id: parsed.is_income ? null : tripId,
+    };
 
     const optimisticTransaction: Transaction = {
-      ...parsed,
+      ...payload,
       id: Math.max(...transactions.map((item) => item.id), 0) + 1,
       date: new Date().toISOString(),
     };
@@ -105,10 +150,10 @@ export default function Home() {
     setTransactions((current) => [optimisticTransaction, ...current]);
 
     try {
-      const response = await fetch(`${apiBase}/transactions`, {
+      const response = await authFetch("/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error("Failed to save transaction");
       const saved = (await response.json()) as Transaction;
@@ -119,11 +164,48 @@ export default function Home() {
     }
   }
 
+  async function updateTransaction(transactionId: number, payload: TransactionPayload) {
+    setTransactions((current) =>
+      current.map((transaction) => (transaction.id === transactionId ? { ...transaction, ...payload } : transaction)),
+    );
+
+    try {
+      const response = await authFetch(`/transactions/${transactionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error("Failed to update transaction");
+      const saved = (await response.json()) as Transaction;
+      setTransactions((current) => current.map((transaction) => (transaction.id === saved.id ? saved : transaction)));
+      setApiStatus("online");
+    } catch {
+      setApiStatus("offline");
+    }
+  }
+
+  async function deleteTransaction(transactionId: number) {
+    const previousTransactions = transactions;
+    setTransactions((current) => current.filter((transaction) => transaction.id !== transactionId));
+
+    try {
+      const response = await authFetch(`/transactions/${transactionId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete transaction");
+      setApiStatus("online");
+    } catch {
+      setTransactions(previousTransactions);
+      setApiStatus("offline");
+    }
+  }
+
   const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "None";
   const savingsRate = monthIncome <= 0 ? 0 : Math.max(0, Math.round(((monthIncome - monthSpend) / monthIncome) * 100));
 
   return (
-    <main className="workspace">
+    <AuthGate token={token} username={username} onLogin={login} onLogout={logout}>
+      <main className="workspace">
       <section className="hero">
         <div>
           <p className="eyebrow">PUFT web command center</p>
@@ -147,6 +229,18 @@ export default function Home() {
           onChange={(event) => setQuickEntry(event.target.value)}
           placeholder='Try "250 lunch", "petrol 800", or "earned 50000 salary"'
         />
+        <select
+          aria-label="Attach expense to trip"
+          value={selectedTripId}
+          onChange={(event) => setSelectedTripId(event.target.value)}
+        >
+          <option value="">No trip</option>
+          {trips.map((trip) => (
+            <option key={trip.id} value={trip.id}>
+              {trip.name}
+            </option>
+          ))}
+        </select>
         <button type="submit">Log</button>
       </form>
 
@@ -157,12 +251,35 @@ export default function Home() {
         <Metric label="Top category" value={topCategory} tone="ink" />
       </section>
 
-      <section className="grid">
+      <section className="home-actions">
+        <Link className="panel action-panel" href="/trips">
+          <div>
+            <p className="eyebrow">Trips</p>
+            <h2>Manage trip workspaces</h2>
+          </div>
+          <div className="action-panel-metrics">
+            <span>{trips.length} trips</span>
+            <strong>{formatMoney(tripSpend)}</strong>
+          </div>
+        </Link>
+        <Link className="panel action-panel" href="/daily">
+          <div>
+            <p className="eyebrow">Daily life</p>
+            <h2>General spend</h2>
+          </div>
+          <div className="action-panel-metrics">
+            <span>{generalTransactions.filter((item) => !item.is_income).length} expenses</span>
+            <strong>{formatMoney(generalTransactions.filter((item) => !item.is_income).reduce((sum, item) => sum + item.amount, 0))}</strong>
+          </div>
+        </Link>
+      </section>
+
+      <section className="grid uniform-grid">
         <div className="panel">
           <div className="panel-header">
             <div>
               <p className="eyebrow">Category pulse</p>
-              <h2>Where the month is moving</h2>
+              <h2>Month movement</h2>
             </div>
           </div>
           <div className="bars">
@@ -183,32 +300,32 @@ export default function Home() {
         <div className="panel">
           <div className="panel-header">
             <div>
-              <p className="eyebrow">Recent activity</p>
-              <h2>Latest logs</h2>
+              <p className="eyebrow">Main ledger</p>
+              <h2>Loose activity</h2>
             </div>
           </div>
           <div className="transactions">
-            {transactions.slice(0, 8).map((transaction) => (
-              <article className="transaction" key={transaction.id}>
-                <span className={transaction.is_income ? "badge income" : "badge spend"}>
-                  {transaction.is_income ? "In" : "Out"}
-                </span>
-                <div>
-                  <strong>{transaction.description}</strong>
-                  <small>
-                    {transaction.category} / {transaction.merchant}
-                  </small>
-                </div>
-                <b className={transaction.is_income ? "money income-text" : "money"}>
-                  {transaction.is_income ? "+" : "-"}
-                  {formatMoney(transaction.amount)}
-                </b>
-              </article>
-            ))}
+            {generalTransactions.length === 0 ? (
+              <p className="empty-state">No loose activity. Trip spending is grouped in trip pages.</p>
+            ) : (
+              generalTransactions
+                .slice(0, 5)
+                .map((transaction) => (
+                  <EditableTransactionRow
+                    key={transaction.id}
+                    transaction={transaction}
+                    trips={trips}
+                    tripNames={tripNames}
+                    onSave={updateTransaction}
+                    onDelete={deleteTransaction}
+                  />
+                ))
+            )}
           </div>
         </div>
       </section>
-    </main>
+      </main>
+    </AuthGate>
   );
 }
 

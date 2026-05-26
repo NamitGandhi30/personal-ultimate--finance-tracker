@@ -38,6 +38,13 @@ Ship the smallest useful habit loop:
 - Charts: Recharts after the dashboard data model stabilizes.
 - Auth/sync: add only after local workflows feel fast.
 
+## Phase Two Progress
+
+- FastAPI now uses a repository layer.
+- Local development persists transactions in SQLite by default.
+- PostgreSQL can be enabled with `DATABASE_URL`.
+- Neon and Supabase Postgres are supported through `apps/api/.env`.
+
 ## Next Action
 
-Replace in-memory API transactions with a repository interface and PostgreSQL persistence.
+Add edit/delete transaction endpoints and wire them into the web app.

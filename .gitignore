@@ -2,6 +2,10 @@
 *.class
 *.log
 *.pyc
+*.db
+.env
+.env.*
+!.env.example
 *.swp
 .DS_Store
 .atom/
