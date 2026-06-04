@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 420" role="img" aria-labelledby="title desc">
+  <title id="title">High-level architecture</title>
+  <desc id="desc">Flutter and Next.js clients connect to the FastAPI backend, which uses Supabase PostgreSQL with a local SQLite fallback for development.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f1115; }
+      .panel { fill: #161b22; stroke: #2a3240; stroke-width: 2; rx: 18; ry: 18; }
+      .box { fill: #10151c; stroke: #3a4658; stroke-width: 2; rx: 14; ry: 14; }
+      .label { fill: #e7edf5; font: 600 26px Arial, sans-serif; }
+      .text { fill: #c5d0de; font: 500 22px Arial, sans-serif; }
+      .small { fill: #93a4b8; font: 500 18px Arial, sans-serif; }
+      .arrow { stroke: #66d9a3; stroke-width: 5; fill: none; marker-end: url(#arrowhead); }
+      .dashed { stroke: #8b97aa; stroke-width: 4; stroke-dasharray: 10 8; fill: none; marker-end: url(#arrowheadSoft); }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#66d9a3" />
+    </marker>
+    <marker id="arrowheadSoft" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#8b97aa" />
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1100" height="420" rx="24" ry="24" />
+
+  <rect class="panel" x="35" y="40" width="240" height="340" />
+  <text class="label" x="155" y="85" text-anchor="middle">Client Apps</text>
+  <rect class="box" x="65" y="130" width="180" height="78" />
+  <text class="text" x="155" y="175" text-anchor="middle">Flutter App</text>
+  <rect class="box" x="65" y="240" width="180" height="78" />
+  <text class="text" x="155" y="285" text-anchor="middle">Next.js Web App</text>
+
+  <rect class="panel" x="430" y="40" width="240" height="340" />
+  <text class="label" x="550" y="85" text-anchor="middle">Backend</text>
+  <rect class="box" x="460" y="175" width="180" height="78" />
+  <text class="text" x="550" y="220" text-anchor="middle">FastAPI Service</text>
+
+  <rect class="panel" x="825" y="40" width="240" height="340" />
+  <text class="label" x="945" y="85" text-anchor="middle">Storage</text>
+  <rect class="box" x="855" y="130" width="180" height="78" />
+  <text class="text" x="945" y="175" text-anchor="middle">Supabase Postgres</text>
+  <rect class="box" x="855" y="240" width="180" height="78" />
+  <text class="text" x="945" y="285" text-anchor="middle">Local SQLite Fallback</text>
+
+  <path class="arrow" d="M245 169 H430" />
+  <path class="arrow" d="M245 279 H430" />
+  <path class="arrow" d="M670 214 H825" />
+  <path class="dashed" d="M670 277 C760 277 760 279 825 279" />
+
+  <text class="small" x="507" y="150" text-anchor="middle">HTTPS</text>
+  <text class="small" x="507" y="320" text-anchor="middle">HTTPS</text>
+  <text class="small" x="748" y="194" text-anchor="middle">Primary DB</text>
+  <text class="small" x="748" y="302" text-anchor="middle">Development fallback</text>
+</svg>

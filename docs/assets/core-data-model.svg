@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 460" role="img" aria-labelledby="title desc">
+  <title id="title">Core data model</title>
+  <desc id="desc">Users own trips and transactions, and trips group transactions.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f1115; }
+      .entity { fill: #161b22; stroke: #344154; stroke-width: 2; rx: 16; ry: 16; }
+      .head { fill: #1c2531; stroke: #344154; stroke-width: 0; }
+      .title { fill: #f0f5fb; font: 700 24px Arial, sans-serif; }
+      .field { fill: #c9d4e1; font: 500 18px Arial, sans-serif; }
+      .key { fill: #66d9a3; font: 600 18px Arial, sans-serif; }
+      .line { stroke: #66d9a3; stroke-width: 4; fill: none; marker-end: url(#arrowhead); }
+      .cardLabel { fill: #8b97aa; font: 600 16px Arial, sans-serif; letter-spacing: 1px; }
+      .rel { fill: #dce6f2; font: 500 18px Arial, sans-serif; }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#66d9a3" />
+    </marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1100" height="460" rx="24" ry="24" />
+
+  <rect class="entity" x="60" y="120" width="250" height="210" />
+  <rect class="head" x="60" y="120" width="250" height="52" rx="16" ry="16" />
+  <text class="title" x="185" y="154" text-anchor="middle">USERS</text>
+  <text class="field" x="85" y="205">id</text>
+  <text class="field" x="85" y="235">username</text>
+  <text class="field" x="85" y="265">email</text>
+  <text class="cardLabel" x="265" y="205" text-anchor="end">PK</text>
+
+  <rect class="entity" x="425" y="120" width="250" height="210" />
+  <rect class="head" x="425" y="120" width="250" height="52" rx="16" ry="16" />
+  <text class="title" x="550" y="154" text-anchor="middle">TRIPS</text>
+  <text class="field" x="450" y="205">id</text>
+  <text class="field" x="450" y="235">name</text>
+  <text class="field" x="450" y="265">user_id</text>
+  <text class="cardLabel" x="630" y="205" text-anchor="end">PK</text>
+  <text class="cardLabel" x="630" y="265" text-anchor="end">FK</text>
+
+  <rect class="entity" x="790" y="120" width="250" height="210" />
+  <rect class="head" x="790" y="120" width="250" height="52" rx="16" ry="16" />
+  <text class="title" x="915" y="154" text-anchor="middle">TRANSACTIONS</text>
+  <text class="field" x="815" y="205">id</text>
+  <text class="field" x="815" y="235">amount</text>
+  <text class="field" x="815" y="265">category</text>
+  <text class="field" x="815" y="295">user_id</text>
+  <text class="field" x="815" y="325">trip_id</text>
+  <text class="cardLabel" x="990" y="205" text-anchor="end">PK</text>
+  <text class="cardLabel" x="990" y="295" text-anchor="end">FK</text>
+  <text class="cardLabel" x="990" y="325" text-anchor="end">FK</text>
+
+  <path class="line" d="M310 225 H425" />
+  <path class="line" d="M675 235 H790" />
+  <path class="line" d="M310 260 C360 260 380 290 425 290" />
+  <text class="rel" x="355" y="214" text-anchor="middle">owns</text>
+  <text class="rel" x="720" y="224" text-anchor="middle">groups</text>
+  <text class="rel" x="355" y="311" text-anchor="middle">owns</text>
+</svg>
