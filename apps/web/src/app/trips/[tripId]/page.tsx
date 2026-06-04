@@ -18,7 +18,7 @@ type Transaction = {
   trip_id?: number | null;
 };
 
-type CreateTransaction = Omit<Transaction, "id" | "date">;
+type CreateTransaction = Omit<Transaction, "id" | "date"> & { date?: string };
 
 type Trip = {
   id: number;
@@ -34,6 +34,7 @@ export default function TripPage() {
   const params = useParams<{ tripId: string }>();
   const tripId = Number(params.tripId);
   const [quickEntry, setQuickEntry] = useState("");
+  const [logDate, setLogDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
@@ -92,14 +93,16 @@ export default function TripPage() {
       ...parsed,
       is_income: false,
       trip_id: trip.id,
+      date: logDate ? new Date(logDate).toISOString() : new Date().toISOString(),
     };
     const optimisticTransaction: Transaction = {
       ...payload,
       id: Math.max(...transactions.map((transaction) => transaction.id), 0) + 1,
-      date: new Date().toISOString(),
+      date: payload.date || new Date().toISOString(),
     };
 
     setQuickEntry("");
+    setLogDate(new Date().toISOString().split("T")[0]);
     setTransactions((current) => [optimisticTransaction, ...current]);
 
     try {
@@ -180,13 +183,20 @@ export default function TripPage() {
         </div>
       </section>
 
-      <form className="quick-entry trip-quick-entry" onSubmit={submitTripExpense}>
+      <form className="quick-entry trip-quick-entry with-date" onSubmit={submitTripExpense}>
         <span className="quick-icon">+</span>
         <input
           aria-label="Trip expense entry"
           value={quickEntry}
           onChange={(event) => setQuickEntry(event.target.value)}
           placeholder={`Add ${trip?.name ?? "trip"} expense, e.g. "1500 airport cab"`}
+        />
+        <input
+          type="date"
+          aria-label="Transaction date"
+          value={logDate}
+          onChange={(event) => setLogDate(event.target.value)}
+          className="quick-entry-date"
         />
         <button type="submit">Add to trip</button>
       </form>

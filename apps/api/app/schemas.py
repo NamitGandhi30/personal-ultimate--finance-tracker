@@ -43,6 +43,7 @@ class TransactionCreate(BaseModel):
     merchant: str = Field(min_length=1, max_length=120)
     is_income: bool = False
     trip_id: int | None = Field(default=None, gt=0)
+    date: datetime | None = Field(default=None)
 
 
 class TransactionUpdate(TransactionCreate):

@@ -17,7 +17,7 @@ type Transaction = {
   trip_id?: number | null;
 };
 
-type CreateTransaction = Omit<Transaction, "id" | "date">;
+type CreateTransaction = Omit<Transaction, "id" | "date"> & { date?: string };
 
 type Trip = {
   id: number;
@@ -64,6 +64,7 @@ export default function Home() {
   const { token, username, sessionReady, login, register, logout, authFetch } = auth;
   const [quickEntry, setQuickEntry] = useState("");
   const [selectedTripId, setSelectedTripId] = useState("");
+  const [logDate, setLogDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [transactions, setTransactions] = useState<Transaction[]>(seedTransactions);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
@@ -138,15 +139,17 @@ export default function Home() {
     const payload: CreateTransaction = {
       ...parsed,
       trip_id: parsed.is_income ? null : tripId,
+      date: logDate ? new Date(logDate).toISOString() : new Date().toISOString(),
     };
 
     const optimisticTransaction: Transaction = {
       ...payload,
       id: Math.max(...transactions.map((item) => item.id), 0) + 1,
-      date: new Date().toISOString(),
+      date: payload.date || new Date().toISOString(),
     };
 
     setQuickEntry("");
+    setLogDate(new Date().toISOString().split("T")[0]);
     setTransactions((current) => [optimisticTransaction, ...current]);
 
     try {
@@ -285,13 +288,20 @@ export default function Home() {
         </section>
 
         {/* Quick entry box */}
-        <form className="quick-entry" onSubmit={submitQuickEntry}>
+        <form className="quick-entry with-date" onSubmit={submitQuickEntry}>
           <span className="quick-icon">+</span>
           <input
             aria-label="Quick expense entry"
             value={quickEntry}
             onChange={(event) => setQuickEntry(event.target.value)}
             placeholder='Try "250 lunch", "petrol 800", or "earned 50000 salary"'
+          />
+          <input
+            type="date"
+            aria-label="Transaction date"
+            value={logDate}
+            onChange={(event) => setLogDate(event.target.value)}
+            className="quick-entry-date"
           />
           <select
             aria-label="Attach expense to trip"

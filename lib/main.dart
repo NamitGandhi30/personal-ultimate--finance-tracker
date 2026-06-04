@@ -986,11 +986,189 @@ class TransactionsScreen extends StatefulWidget {
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
   final TextEditingController _controller = TextEditingController();
+  DateTime? _filterStartDate;
+  DateTime? _filterEndDate;
+  DateTime? _logDate;
+
+  Future<void> _pickLogDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _logDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF10B981),
+              onPrimary: Colors.black,
+              surface: Color(0xFF161616),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _logDate = picked;
+      });
+    }
+  }
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  List<TransactionEntry> get _filteredTransactions {
+    if (_filterStartDate == null && _filterEndDate == null) {
+      return widget.transactions;
+    }
+
+    return widget.transactions.where((t) {
+      final txDate = DateTime(t.date.year, t.date.month, t.date.day);
+      
+      final start = _filterStartDate != null 
+          ? DateTime(_filterStartDate!.year, _filterStartDate!.month, _filterStartDate!.day)
+          : null;
+          
+      final end = _filterEndDate != null 
+          ? DateTime(_filterEndDate!.year, _filterEndDate!.month, _filterEndDate!.day)
+          : null;
+
+      if (start != null && end != null) {
+        return txDate.isAfter(start.subtract(const Duration(seconds: 1))) && 
+               txDate.isBefore(end.add(const Duration(days: 1)));
+      } else if (start != null) {
+        return txDate.isAtSameMomentAs(start);
+      }
+      return true;
+    }).toList();
+  }
+
+  void _setPresetFilter(String preset) {
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+
+    setState(() {
+      if (preset == 'all') {
+        _filterStartDate = null;
+        _filterEndDate = null;
+      } else if (preset == 'today') {
+        _filterStartDate = todayStart;
+        _filterEndDate = todayStart;
+      } else if (preset == 'yesterday') {
+        _filterStartDate = todayStart.subtract(const Duration(days: 1));
+        _filterEndDate = todayStart.subtract(const Duration(days: 1));
+      } else if (preset == 'month') {
+        _filterStartDate = DateTime(today.year, today.month, 1);
+        _filterEndDate = todayStart;
+      }
+    });
+  }
+
+  Future<void> _pickDateRange() async {
+    final initialDateRange = _filterStartDate != null && _filterEndDate != null
+        ? DateTimeRange(start: _filterStartDate!, end: _filterEndDate!)
+        : DateTimeRange(
+            start: DateTime.now().subtract(const Duration(days: 7)),
+            end: DateTime.now(),
+          );
+
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      initialDateRange: initialDateRange,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF10B981),
+              onPrimary: Colors.black,
+              surface: Color(0xFF161616),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _filterStartDate = picked.start;
+        _filterEndDate = picked.end;
+      });
+    }
+  }
+
+  bool _isTodaySelected() {
+    if (_filterStartDate == null || _filterEndDate == null) return false;
+    final today = DateTime.now();
+    return _filterStartDate!.year == today.year &&
+        _filterStartDate!.month == today.month &&
+        _filterStartDate!.day == today.day &&
+        _filterEndDate!.year == today.year &&
+        _filterEndDate!.month == today.month &&
+        _filterEndDate!.day == today.day;
+  }
+
+  bool _isYesterdaySelected() {
+    if (_filterStartDate == null || _filterEndDate == null) return false;
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    return _filterStartDate!.year == yesterday.year &&
+        _filterStartDate!.month == yesterday.month &&
+        _filterStartDate!.day == yesterday.day &&
+        _filterEndDate!.year == yesterday.year &&
+        _filterEndDate!.month == yesterday.month &&
+        _filterEndDate!.day == yesterday.day;
+  }
+
+  bool _isThisMonthSelected() {
+    if (_filterStartDate == null || _filterEndDate == null) return false;
+    final today = DateTime.now();
+    return _filterStartDate!.year == today.year &&
+        _filterStartDate!.month == today.month &&
+        _filterStartDate!.day == 1 &&
+        _filterEndDate!.year == today.year &&
+        _filterEndDate!.month == today.month &&
+        _filterEndDate!.day == today.day;
+  }
+
+  String _monthName(int monthNum) {
+    const names = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return names[monthNum];
+  }
+
+  Widget _buildPresetChip(String preset, String label) {
+    final isActive = (preset == 'all' && _filterStartDate == null && _filterEndDate == null) ||
+        (preset == 'today' && _isTodaySelected()) ||
+        (preset == 'yesterday' && _isYesterdaySelected()) ||
+        (preset == 'month' && _isThisMonthSelected());
+
+    return ChoiceChip(
+      label: Text(label),
+      selected: isActive,
+      onSelected: (_) => _setPresetFilter(preset),
+      selectedColor: const Color(0xFF10B981),
+      labelStyle: TextStyle(
+        color: isActive ? Colors.black : Colors.white,
+        fontWeight: FontWeight.bold,
+        fontSize: 12,
+      ),
+      backgroundColor: const Color(0xFF161616),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: isActive ? const Color(0xFF10B981) : const Color(0xFF222222)),
+      ),
+    );
   }
 
   void _submitLog() {
@@ -1014,12 +1192,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         description: description,
         category: isIncome ? 'Income' : 'General',
         merchant: 'Manual Log',
-        date: DateTime.now(),
+        date: _logDate ?? DateTime.now(),
         isIncome: isIncome,
       ),
     );
 
     _controller.clear();
+    setState(() {
+      _logDate = null;
+    });
   }
 
   void _showEditTransactionSheet(BuildContext context, TransactionEntry t) {
@@ -1145,18 +1326,116 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filteredTransactions;
+    final totalSpend = filtered.where((t) => !t.isIncome).fold<double>(0, (sum, t) => sum + t.amount);
+    final totalIncome = filtered.where((t) => t.isIncome).fold<double>(0, (sum, t) => sum + t.amount);
+    final count = filtered.length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Activity Ledger'),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.calendar_month,
+              color: (_filterStartDate != null) ? const Color(0xFF10B981) : Colors.white,
+            ),
+            onPressed: _pickDateRange,
+          ),
+          if (_filterStartDate != null || _filterEndDate != null)
+            IconButton(
+              icon: const Icon(Icons.clear_all, color: Colors.redAccent),
+              onPressed: () {
+                setState(() {
+                  _filterStartDate = null;
+                  _filterEndDate = null;
+                });
+              },
+            ),
+        ],
       ),
       body: SafeArea(
         child: Column(
           children: [
+            // Filter Preset Chips
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildPresetChip('all', 'All Time'),
+                    const SizedBox(width: 8),
+                    _buildPresetChip('today', 'Today'),
+                    const SizedBox(width: 8),
+                    _buildPresetChip('yesterday', 'Yesterday'),
+                    const SizedBox(width: 8),
+                    _buildPresetChip('month', 'This Month'),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Dynamic Analytics Summary Card
+            if (_filterStartDate != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF161616),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF222222)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _filterEndDate == null || _filterStartDate == _filterEndDate
+                            ? 'Showing: ${_filterStartDate!.day} ${_monthName(_filterStartDate!.month)}'
+                            : 'Showing: ${_filterStartDate!.day} ${_monthName(_filterStartDate!.month)} - ${_filterEndDate!.day} ${_monthName(_filterEndDate!.month)}',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Spend', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                              const SizedBox(height: 2),
+                              Text('\$${totalSpend.toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Earned', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                              const SizedBox(height: 2),
+                              Text('\$${totalIncome.toStringAsFixed(2)}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF10B981))),
+                            ],
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Entries', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                              const SizedBox(height: 2),
+                              Text('$count', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.blue)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             // Quick entry box
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 decoration: BoxDecoration(
@@ -1188,10 +1467,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             ),
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.all(20.0),
-                itemCount: widget.transactions.length,
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
+                itemCount: filtered.length,
                 itemBuilder: (context, index) {
-                  final t = widget.transactions[index];
+                  final t = filtered[index];
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     onTap: () => _showEditTransactionSheet(context, t),

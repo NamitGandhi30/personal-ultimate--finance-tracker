@@ -31,7 +31,7 @@ class TransactionRepository:
             merchant=payload.merchant,
             is_income=payload.is_income,
             trip_id=payload.trip_id,
-            date=datetime.now(timezone.utc),
+            date=payload.date if payload.date is not None else datetime.now(timezone.utc),
         )
         self.session.add(transaction)
         self.session.flush()
@@ -63,6 +63,8 @@ class TransactionRepository:
         transaction.merchant = payload.merchant
         transaction.is_income = payload.is_income
         transaction.trip_id = payload.trip_id
+        if payload.date is not None:
+            transaction.date = payload.date
         self.session.flush()
         self.session.refresh(transaction)
         return transaction
