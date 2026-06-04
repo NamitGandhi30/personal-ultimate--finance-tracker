@@ -18,6 +18,7 @@ from app.schemas import (
     TransactionUpdate,
     TripCreate,
     TripRead,
+    TripUpdate,
     UserRead,
 )
 
@@ -173,3 +174,28 @@ def create_trip(
     username: str = Depends(require_auth),
 ) -> TripRead:
     return TripRepository(session, username).create(payload)
+
+
+@app.put("/trips/{trip_id}", response_model=TripRead)
+def update_trip(
+    trip_id: int,
+    payload: TripUpdate,
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> TripRead:
+    trip = TripRepository(session, username).update(trip_id, payload)
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Trip not found")
+    return trip
+
+
+@app.delete("/trips/{trip_id}", status_code=204)
+def delete_trip(
+    trip_id: int,
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> None:
+    deleted = TripRepository(session, username).delete(trip_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Trip not found")
+

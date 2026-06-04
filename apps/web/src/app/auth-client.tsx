@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 const tokenKey = "puft_auth_token";
@@ -123,7 +125,14 @@ export function useAuth(): AuthState {
 
   const authFetch = useCallback(async (path: string, init: RequestInit = {}) => {
     const currentToken = token ?? window.localStorage.getItem(tokenKey);
-    const response = await fetch(`${apiBase}${path}`, {
+    let targetPath = path;
+    const method = (init.method ?? "GET").toUpperCase();
+    if (method === "GET") {
+      const separator = path.includes("?") ? "&" : "?";
+      targetPath = `${path}${separator}_t=${Date.now()}`;
+    }
+
+    const response = await fetch(`${apiBase}${targetPath}`, {
       ...init,
       headers: {
         ...(init.headers ?? {}),
@@ -154,6 +163,7 @@ export function AuthGate({
   onLogout: () => void;
   children: ReactNode;
 }) {
+  const pathname = usePathname();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loginName, setLoginName] = useState("admin");
   const [password, setPassword] = useState("");
@@ -292,14 +302,46 @@ export function AuthGate({
   }
 
   return (
-    <>
-      <div className="session-bar">
-        <span>Signed in as {username || "admin"}</span>
-        <button type="button" onClick={onLogout}>
-          Sign out
-        </button>
+    <div className="app-container">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="7" height="7" rx="2" fill="#10b981"/>
+            <rect x="14" y="3" width="7" height="7" rx="2" fill="#10b981"/>
+            <rect x="3" y="14" width="7" height="7" rx="2" fill="#10b981"/>
+            <rect x="14" y="14" width="7" height="7" rx="2" fill="#10b981"/>
+          </svg>
+          <h2>PUFT</h2>
+        </div>
+        <nav className="sidebar-nav">
+          <Link href="/" className={`nav-item ${pathname === "/" ? "active" : ""}`}>
+            Dashboard
+          </Link>
+          <Link href="/daily" className={`nav-item ${pathname === "/daily" ? "active" : ""}`}>
+            Transactions
+          </Link>
+          <Link href="/trips" className={`nav-item ${pathname === "/trips" ? "active" : ""}`}>
+            Trips
+          </Link>
+          <a href="#" className="nav-item">
+            Budgets
+          </a>
+          <a href="#" className="nav-item">
+            Settings
+          </a>
+        </nav>
+        <div className="sidebar-footer">
+          <div className="user-info">
+            <span className="username">@{username || "admin"}</span>
+          </div>
+          <button type="button" className="logout-btn" onClick={onLogout}>
+            Sign out
+          </button>
+        </div>
+      </aside>
+      <div className="main-content">
+        {children}
       </div>
-      {children}
-    </>
+    </div>
   );
 }

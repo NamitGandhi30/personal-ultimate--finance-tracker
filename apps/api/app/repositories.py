@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import AUTH_PASSWORD, AUTH_USERNAME, hash_password, verify_password
 from app.models import TransactionModel, TripModel, UserModel
-from app.schemas import RegisterRequest, TransactionCreate, TransactionTripUpdate, TransactionUpdate, TripCreate
+from app.schemas import RegisterRequest, TransactionCreate, TransactionTripUpdate, TransactionUpdate, TripCreate, TripUpdate
 
 
 class TransactionRepository:
@@ -212,3 +212,31 @@ class TripRepository:
         self.session.flush()
         self.session.refresh(trip)
         return trip
+
+    def update(self, trip_id: int, payload: TripUpdate) -> TripModel | None:
+        trip = self._get_owned_trip(trip_id)
+        if trip is None:
+            return None
+        trip.name = payload.name
+        trip.destination = payload.destination
+        trip.budget = payload.budget
+        self.session.flush()
+        self.session.refresh(trip)
+        return trip
+
+    def delete(self, trip_id: int) -> bool:
+        trip = self._get_owned_trip(trip_id)
+        if trip is None:
+            return False
+        # Nullify associated transactions
+        self.session.query(TransactionModel).filter(TransactionModel.trip_id == trip_id).update({TransactionModel.trip_id: None})
+        self.session.delete(trip)
+        self.session.flush()
+        return True
+
+    def _get_owned_trip(self, trip_id: int) -> TripModel | None:
+        statement = select(TripModel).where(TripModel.id == trip_id)
+        if self.user is not None:
+            statement = statement.where(TripModel.user_id == self.user.id)
+        return self.session.scalars(statement).first()
+

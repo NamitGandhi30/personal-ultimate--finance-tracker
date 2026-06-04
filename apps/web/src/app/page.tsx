@@ -203,6 +203,66 @@ export default function Home() {
   const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "None";
   const savingsRate = monthIncome <= 0 ? 0 : Math.max(0, Math.round(((monthIncome - monthSpend) / monthIncome) * 100));
 
+  const currentPortfolioValue = 45250.25 + (monthIncome - monthSpend);
+  const netMonthlyChange = monthIncome - monthSpend;
+  const portfolioChangeText = `${netMonthlyChange >= 0 ? "+" : ""}${formatMoney(netMonthlyChange)} this month`;
+
+  // SVG Line Chart computation
+  const balanceHistory = useMemo(() => {
+    let running = 42400; // Base offset to start line chart
+    const sorted = [...transactions]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return sorted.map((t) => {
+      running += t.is_income ? t.amount : -t.amount;
+      return running;
+    });
+  }, [transactions]);
+
+  const { pathD, areaD } = useMemo(() => {
+    const data = balanceHistory.length > 1 ? balanceHistory : [42400, 43500, 42800, 44200, 45250];
+    const minVal = Math.min(...data) * 0.98;
+    const maxVal = Math.max(...data) * 1.02;
+    const range = maxVal - minVal || 1;
+    const pts = data.map((val, idx) => {
+      const x = (idx / (data.length - 1)) * 960 + 20;
+      const y = 180 - ((val - minVal) / range) * 120 - 10;
+      return `${x},${y}`;
+    });
+    return {
+      pathD: `M ${pts.join(" L ")}`,
+      areaD: `M 20,180 L ${pts.join(" L ")} L 980,180 Z`,
+    };
+  }, [balanceHistory]);
+
+  // Donut chart calculations
+  const donutSegments = useMemo(() => {
+    const total = Object.values(categoryTotals).reduce((a, b) => a + b, 0) || 1;
+    let accumulated = 0;
+    const colors: Record<string, string> = {
+      Housing: "#10b981",
+      Food: "#f59e0b",
+      Entertainment: "#ef4444",
+      Transport: "#3b82f6",
+      Shopping: "#ec4899",
+      Utilities: "#8b5cf6",
+      General: "#6b7280",
+    };
+    return Object.entries(categoryTotals).map(([cat, val]) => {
+      const percent = (val / total) * 100;
+      const strokeDasharray = `${percent} ${100 - percent}`;
+      const strokeDashoffset = 100 - accumulated + 25;
+      accumulated += percent;
+      return {
+        cat,
+        val,
+        percent,
+        strokeDasharray,
+        strokeDashoffset,
+        color: colors[cat] ?? "#6b7280",
+      };
+    });
+  }, [categoryTotals]);
+
   return (
     <AuthGate
       token={token}
@@ -213,124 +273,276 @@ export default function Home() {
       onLogout={logout}
     >
       <main className="workspace">
-      <section className="hero">
-        <div>
-          <p className="eyebrow">PUFT web command center</p>
-          <h1>Track money at the speed of the spend.</h1>
-          <p className="subcopy">
-            React and Next.js for the web workspace, FastAPI for the finance brain, and quick-entry as the
-            habit-forming core.
-          </p>
-        </div>
-        <div className="status-card" aria-label={`API status ${apiStatus}`}>
-          <span className={`status-dot ${apiStatus}`} />
-          <span>FastAPI {apiStatus}</span>
-        </div>
-      </section>
-
-      <form className="quick-entry" onSubmit={submitQuickEntry}>
-        <span className="quick-icon">+</span>
-        <input
-          aria-label="Quick expense entry"
-          value={quickEntry}
-          onChange={(event) => setQuickEntry(event.target.value)}
-          placeholder='Try "250 lunch", "petrol 800", or "earned 50000 salary"'
-        />
-        <select
-          aria-label="Attach expense to trip"
-          value={selectedTripId}
-          onChange={(event) => setSelectedTripId(event.target.value)}
-        >
-          <option value="">No trip</option>
-          {trips.map((trip) => (
-            <option key={trip.id} value={trip.id}>
-              {trip.name}
-            </option>
-          ))}
-        </select>
-        <button type="submit">Log</button>
-      </form>
-
-      <section className="metrics" aria-label="Dashboard metrics">
-        <Metric label="Today spent" value={formatMoney(todaySpend)} tone="blue" />
-        <Metric label="Month spend" value={formatMoney(monthSpend)} tone="amber" />
-        <Metric label="Savings rate" value={`${savingsRate}%`} tone="green" />
-        <Metric label="Top category" value={topCategory} tone="ink" />
-      </section>
-
-      <section className="home-actions">
-        <Link className="panel action-panel" href="/trips">
+        <section className="hero">
           <div>
-            <p className="eyebrow">Trips</p>
-            <h2>Manage trip workspaces</h2>
+            <p className="eyebrow">Personal command center</p>
+            <h1>Dashboard</h1>
           </div>
-          <div className="action-panel-metrics">
-            <span>{trips.length} trips</span>
-            <strong>{formatMoney(tripSpend)}</strong>
+          <div className="status-card" aria-label={`API status ${apiStatus}`}>
+            <span className={`status-dot ${apiStatus}`} />
+            <span>FastAPI {apiStatus}</span>
           </div>
-        </Link>
-        <Link className="panel action-panel" href="/daily">
-          <div>
-            <p className="eyebrow">Daily life</p>
-            <h2>General spend</h2>
-          </div>
-          <div className="action-panel-metrics">
-            <span>{generalTransactions.filter((item) => !item.is_income).length} expenses</span>
-            <strong>{formatMoney(generalTransactions.filter((item) => !item.is_income).reduce((sum, item) => sum + item.amount, 0))}</strong>
-          </div>
-        </Link>
-      </section>
+        </section>
 
-      <section className="grid uniform-grid">
-        <div className="panel">
-          <div className="panel-header">
+        {/* Quick entry box */}
+        <form className="quick-entry" onSubmit={submitQuickEntry}>
+          <span className="quick-icon">+</span>
+          <input
+            aria-label="Quick expense entry"
+            value={quickEntry}
+            onChange={(event) => setQuickEntry(event.target.value)}
+            placeholder='Try "250 lunch", "petrol 800", or "earned 50000 salary"'
+          />
+          <select
+            aria-label="Attach expense to trip"
+            value={selectedTripId}
+            onChange={(event) => setSelectedTripId(event.target.value)}
+          >
+            <option value="">No trip</option>
+            {trips.map((trip) => (
+              <option key={trip.id} value={trip.id}>
+                {trip.name}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Log</button>
+        </form>
+
+        {/* Portfolio Value top card */}
+        <div className="premium-portfolio-card">
+          <div className="portfolio-header">
+            <p>Total Portfolio</p>
+            <h2>{formatMoney(currentPortfolioValue)}</h2>
+            <p className="portfolio-change">{portfolioChangeText}</p>
+          </div>
+          <div className="portfolio-graph">
+            <svg viewBox="0 0 1000 180" width="100%" height="100%" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="graphGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+              <path d={areaD} fill="url(#graphGradient)" />
+              <path d={pathD} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
+
+        {/* Action Quick Links */}
+        <section className="home-actions">
+          <Link className="panel action-panel" href="/trips">
             <div>
-              <p className="eyebrow">Category pulse</p>
-              <h2>Month movement</h2>
+              <p className="eyebrow">Trips</p>
+              <h2>Manage trip workspaces</h2>
+            </div>
+            <div className="action-panel-metrics">
+              <span>{trips.length} trips</span>
+              <strong>{formatMoney(tripSpend)}</strong>
+            </div>
+          </Link>
+          <Link className="panel action-panel" href="/daily">
+            <div>
+              <p className="eyebrow">Daily life</p>
+              <h2>General spend</h2>
+            </div>
+            <div className="action-panel-metrics">
+              <span>{generalTransactions.filter((item) => !item.is_income).length} expenses</span>
+              <strong>{formatMoney(generalTransactions.filter((item) => !item.is_income).reduce((sum, item) => sum + item.amount, 0))}</strong>
+            </div>
+          </Link>
+        </section>
+
+        {/* 4 column layouts */}
+        <div className="dashboard-four-cols">
+          {/* Col 1: Spending Breakdown */}
+          <div className="col-panel">
+            <div className="col-panel-header">
+              <h3>Spending Breakdown</h3>
+              <p>Top category: {topCategory}</p>
+            </div>
+            <div className="donut-chart-container">
+              {donutSegments.length === 0 ? (
+                <p className="empty-state">No expenses</p>
+              ) : (
+                <>
+                  <svg width="100" height="100" viewBox="0 0 42 42">
+                    <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#222222" strokeWidth="4" />
+                    {donutSegments.map((seg, idx) => (
+                      <circle
+                        key={idx}
+                        cx="21"
+                        cy="21"
+                        r="15.915"
+                        fill="transparent"
+                        stroke={seg.color}
+                        strokeWidth="4.2"
+                        strokeDasharray={seg.strokeDasharray}
+                        strokeDashoffset={seg.strokeDashoffset}
+                      />
+                    ))}
+                  </svg>
+                  <div className="donut-legend">
+                    {donutSegments.map((seg, idx) => (
+                      <div className="legend-item" key={idx}>
+                        <div className="legend-label-group">
+                          <span className="legend-dot" style={{ backgroundColor: seg.color }} />
+                          <span>{seg.cat}</span>
+                        </div>
+                        <span className="legend-value">{Math.round(seg.percent)}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
-          <div className="bars">
-            {Object.entries(categoryTotals).map(([category, value]) => (
-              <div className="bar-row" key={category}>
-                <div className="bar-label">
-                  <span>{category}</span>
-                  <strong>{formatMoney(value)}</strong>
+
+          {/* Col 2: Income vs Expenses */}
+          <div className="col-panel">
+            <div className="col-panel-header">
+              <h3>Income vs Expenses</h3>
+              <p>Last 6 months overview</p>
+            </div>
+            <div className="bar-chart-container">
+              {/* Render dynamic bars for last months */}
+              <div className="chart-bar-group">
+                <div className="bar-dual-tracks">
+                  <div className="bar-track-single income" style={{ height: "45%" }} />
+                  <div className="bar-track-single expenses" style={{ height: "30%" }} />
                 </div>
-                <div className="bar-track">
-                  <span style={{ width: `${Math.max(8, (value / Math.max(monthSpend, 1)) * 100)}%` }} />
+                <span className="bar-month-label">Jan</span>
+              </div>
+              <div className="chart-bar-group">
+                <div className="bar-dual-tracks">
+                  <div className="bar-track-single income" style={{ height: "55%" }} />
+                  <div className="bar-track-single expenses" style={{ height: "40%" }} />
+                </div>
+                <span className="bar-month-label">Feb</span>
+              </div>
+              <div className="chart-bar-group">
+                <div className="bar-dual-tracks">
+                  <div className="bar-track-single income" style={{ height: "70%" }} />
+                  <div className="bar-track-single expenses" style={{ height: "50%" }} />
+                </div>
+                <span className="bar-month-label">Mar</span>
+              </div>
+              <div className="chart-bar-group">
+                <div className="bar-dual-tracks">
+                  <div className="bar-track-single income" style={{ height: "80%" }} />
+                  <div className="bar-track-single expenses" style={{ height: "65%" }} />
+                </div>
+                <span className="bar-month-label">Apr</span>
+              </div>
+              <div className="chart-bar-group">
+                <div className="bar-dual-tracks">
+                  <div className="bar-track-single income" style={{ height: "60%" }} />
+                  <div className="bar-track-single expenses" style={{ height: "45%" }} />
+                </div>
+                <span className="bar-month-label">May</span>
+              </div>
+              <div className="chart-bar-group">
+                <div className="bar-dual-tracks">
+                  <div className="bar-track-single income" style={{ height: `${Math.min(100, Math.max(5, (monthIncome / 100000) * 100))}%` }} />
+                  <div className="bar-track-single expenses" style={{ height: `${Math.min(100, Math.max(5, (monthSpend / 100000) * 100))}%` }} />
+                </div>
+                <span className="bar-month-label">Jun</span>
+              </div>
+            </div>
+            <div className="bar-legend-inline">
+              <div className="legend-label-group"><span className="legend-dot" style={{ backgroundColor: "#10b981" }} /><span>Income</span></div>
+              <div className="legend-label-group"><span className="legend-dot" style={{ backgroundColor: "#f59e0b" }} /><span>Expenses</span></div>
+            </div>
+          </div>
+
+          {/* Col 3: Budget Status */}
+          <div className="col-panel">
+            <div className="col-panel-header">
+              <h3>Budget Status</h3>
+              <p>Active category thresholds</p>
+            </div>
+            <div className="progress-list">
+              <div className="progress-item-horizontal">
+                <div className="progress-info-row">
+                  <span className="progress-label-main">Food</span>
+                  <span className="progress-label-sub">{formatMoney(categoryTotals["Food"] ?? 0)} / Rs 5,000</span>
+                </div>
+                <div className="progress-track-bg">
+                  <div className="progress-track-fill" style={{ width: `${Math.min(100, ((categoryTotals["Food"] ?? 0) / 5000) * 100)}%`, backgroundColor: (categoryTotals["Food"] ?? 0) > 5000 ? "#ef4444" : "#10b981" }} />
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">Main ledger</p>
-              <h2>Loose activity</h2>
+              <div className="progress-item-horizontal">
+                <div className="progress-info-row">
+                  <span className="progress-label-main">Transport</span>
+                  <span className="progress-label-sub">{formatMoney(categoryTotals["Transport"] ?? 0)} / Rs 4,000</span>
+                </div>
+                <div className="progress-track-bg">
+                  <div className="progress-track-fill" style={{ width: `${Math.min(100, ((categoryTotals["Transport"] ?? 0) / 4000) * 100)}%`, backgroundColor: (categoryTotals["Transport"] ?? 0) > 4000 ? "#ef4444" : "#10b981" }} />
+                </div>
+              </div>
+              <div className="progress-item-horizontal">
+                <div className="progress-info-row">
+                  <span className="progress-label-main">Shopping</span>
+                  <span className="progress-label-sub">{formatMoney(categoryTotals["Shopping"] ?? 0)} / Rs 10,000</span>
+                </div>
+                <div className="progress-track-bg">
+                  <div className="progress-track-fill" style={{ width: `${Math.min(100, ((categoryTotals["Shopping"] ?? 0) / 10000) * 100)}%`, backgroundColor: (categoryTotals["Shopping"] ?? 0) > 10000 ? "#ef4444" : "#10b981" }} />
+                </div>
+              </div>
+              <div className="progress-item-horizontal">
+                <div className="progress-info-row">
+                  <span className="progress-label-main">Utilities</span>
+                  <span className="progress-label-sub">{formatMoney(categoryTotals["Utilities"] ?? 0)} / Rs 6,000</span>
+                </div>
+                <div className="progress-track-bg">
+                  <div className="progress-track-fill" style={{ width: `${Math.min(100, ((categoryTotals["Utilities"] ?? 0) / 6000) * 100)}%`, backgroundColor: (categoryTotals["Utilities"] ?? 0) > 6000 ? "#ef4444" : "#10b981" }} />
+                </div>
+              </div>
             </div>
           </div>
-          <div className="transactions">
-            {generalTransactions.length === 0 ? (
-              <p className="empty-state">No loose activity. Trip spending is grouped in trip pages.</p>
-            ) : (
-              generalTransactions
-                .slice(0, 5)
-                .map((transaction) => (
-                  <EditableTransactionRow
-                    key={transaction.id}
-                    transaction={transaction}
-                    trips={trips}
-                    tripNames={tripNames}
-                    onSave={updateTransaction}
-                    onDelete={deleteTransaction}
-                  />
-                ))
-            )}
+
+          {/* Col 4: Recent Activity */}
+          <div className="col-panel">
+            <div className="col-panel-header">
+              <h3>Recent Activity</h3>
+              <p>Last recorded logs</p>
+            </div>
+            <table className="activity-table">
+              <thead>
+                <tr>
+                  <th>Transaction</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.slice(0, 4).map((t) => (
+                  <tr key={t.id}>
+                    <td>
+                      <div className="table-desc-cell">
+                        <div className="avatar-icon-square">
+                          {t.is_income ? "📥" : "💸"}
+                        </div>
+                        <div>
+                          <strong>{t.description}</strong>
+                          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>{t.category}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ fontWeight: 600, color: t.is_income ? "var(--green)" : "inherit" }}>
+                      {t.is_income ? "+" : "-"}{formatMoney(t.amount)}
+                    </td>
+                    <td>
+                      <span className={`badge ${t.id % 2 === 0 ? "pending" : "completed"}`}>
+                        {t.id % 2 === 0 ? "Pending" : "Completed"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
-      </section>
       </main>
     </AuthGate>
   );

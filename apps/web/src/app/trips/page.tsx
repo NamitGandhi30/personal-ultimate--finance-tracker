@@ -41,6 +41,12 @@ export default function TripsPage() {
     budget: "",
   });
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
+  const [editingTripId, setEditingTripId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<TripForm>({
+    name: "",
+    destination: "",
+    budget: "",
+  });
 
   useEffect(() => {
     if (!token) return;
@@ -74,11 +80,68 @@ export default function TripsPage() {
   const totalBudget = trips.reduce((sum, trip) => sum + trip.budget, 0);
   const activeTrips = trips.filter((trip) => (tripSpendTotals[trip.id] ?? 0) > 0).length;
 
+  function startEdit(trip: Trip) {
+    setEditingTripId(trip.id);
+    setEditForm({
+      name: trip.name,
+      destination: trip.destination,
+      budget: String(trip.budget),
+    });
+  }
+
+  async function saveTripEdit(tripId: number) {
+    const name = editForm.name.trim();
+    const destination = editForm.destination.trim();
+    const cleanedBudgetStr = String(editForm.budget || "").replace(/[^0-9.]/g, "");
+    const budget = Number(cleanedBudgetStr || 0);
+    if (!name || !destination || !Number.isFinite(budget) || budget < 0) return;
+
+    // Optimistic update
+    setTrips((current) =>
+      current.map((t) => (t.id === tripId ? { ...t, name, destination, budget } : t))
+    );
+    setEditingTripId(null);
+
+    try {
+      const response = await authFetch(`/trips/${tripId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, destination, budget }),
+      });
+      if (!response.ok) throw new Error("Failed to update trip");
+      const updated = (await response.json()) as Trip;
+      setTrips((current) => current.map((t) => (t.id === tripId ? updated : t)));
+      setApiStatus("online");
+    } catch {
+      setApiStatus("offline");
+    }
+  }
+
+  async function deleteTrip(tripId: number) {
+    if (!confirm("Are you sure you want to delete this trip? Associated transactions will remain but have their trip workspace unassigned.")) return;
+
+    // Optimistic update
+    setTrips((current) => current.filter((t) => t.id !== tripId));
+    setTransactions((current) => current.map((tx) => tx.trip_id === tripId ? { ...tx, trip_id: null } : tx));
+    setEditingTripId(null);
+
+    try {
+      const response = await authFetch(`/trips/${tripId}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("Failed to delete trip");
+      setApiStatus("online");
+    } catch {
+      setApiStatus("offline");
+    }
+  }
+
   async function submitTrip(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = tripForm.name.trim();
     const destination = tripForm.destination.trim();
-    const budget = Number(tripForm.budget || 0);
+    const cleanedBudgetStr = String(tripForm.budget || "").replace(/[^0-9.]/g, "");
+    const budget = Number(cleanedBudgetStr || 0);
     if (!name || !destination || !Number.isFinite(budget) || budget < 0) return;
 
     const optimisticTrip: Trip = {
@@ -192,6 +255,42 @@ export default function TripsPage() {
                 const spent = tripSpendTotals[trip.id] ?? 0;
                 const remaining = Math.max(0, trip.budget - spent);
                 const progress = trip.budget <= 0 ? 0 : Math.min(100, (spent / trip.budget) * 100);
+                const isEditing = editingTripId === trip.id;
+
+                if (isEditing) {
+                  return (
+                    <article className="trip-card edit-mode" key={trip.id}>
+                      <div className="trip-card-edit-form">
+                        <label>
+                          <span>Trip name</span>
+                          <input
+                            value={editForm.name}
+                            onChange={(e) => setEditForm((curr) => ({ ...curr, name: e.target.value }))}
+                          />
+                        </label>
+                        <label>
+                          <span>Destination</span>
+                          <input
+                            value={editForm.destination}
+                            onChange={(e) => setEditForm((curr) => ({ ...curr, destination: e.target.value }))}
+                          />
+                        </label>
+                        <label>
+                          <span>Budget</span>
+                          <input
+                            value={editForm.budget}
+                            onChange={(e) => setEditForm((curr) => ({ ...curr, budget: e.target.value }))}
+                          />
+                        </label>
+                        <div className="trip-card-actions">
+                          <button className="save-btn" onClick={() => saveTripEdit(trip.id)}>Save</button>
+                          <button className="ghost-btn" onClick={() => setEditingTripId(null)}>Cancel</button>
+                          <button className="danger-btn" onClick={() => deleteTrip(trip.id)}>Delete</button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                }
 
                 return (
                   <article className="trip-card" key={trip.id}>
@@ -209,9 +308,14 @@ export default function TripsPage() {
                       <span>Budget {formatMoney(trip.budget)}</span>
                       <span>Left {formatMoney(remaining)}</span>
                     </div>
-                    <Link className="trip-open-link" href={`/trips/${trip.id}`}>
-                      Open trip page
-                    </Link>
+                    <div className="trip-card-bottom-actions">
+                      <Link className="trip-open-link" href={`/trips/${trip.id}`}>
+                        Open trip page
+                      </Link>
+                      <button className="trip-edit-link" onClick={() => startEdit(trip)}>
+                        Edit
+                      </button>
+                    </div>
                   </article>
                 );
               })

@@ -66,6 +66,11 @@ class TripCreate(BaseModel):
     budget: float = Field(default=0, ge=0)
 
 
+class TripUpdate(TripCreate):
+    pass
+
+
+
 class TripRead(TripCreate):
     model_config = ConfigDict(from_attributes=True)
 

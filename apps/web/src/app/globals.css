@@ -1,13 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 :root {
-  --background: #f4f1e8;
-  --foreground: #17211f;
-  --muted: #65706a;
-  --panel: #fffdf6;
-  --line: #ded8c6;
-  --green: #0f766e;
-  --blue: #255e91;
-  --amber: #a45c16;
-  --ink: #17211f;
+  --background: #000000;
+  --foreground: #ffffff;
+  --muted: #888888;
+  --panel: #161616;
+  --line: #222222;
+  --green: #10b981;
+  --blue: #3b82f6;
+  --amber: #f59e0b;
+  --ink: #ffffff;
 }
 
 html {
@@ -26,7 +28,7 @@ body {
   flex-direction: column;
   color: var(--foreground);
   background: var(--background);
-  font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
