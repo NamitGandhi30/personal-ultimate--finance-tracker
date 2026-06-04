@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react";
+import { FormEvent, ReactNode, createContext, useCallback, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -32,7 +32,9 @@ type RegisterPayload = {
   preferred_currency: string;
 };
 
-export function useAuth(): AuthState {
+const AuthContext = createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [username, setUsername] = useState("");
   const [sessionReady, setSessionReady] = useState(false);
@@ -143,7 +145,17 @@ export function useAuth(): AuthState {
     return response;
   }, [clearSession, token]);
 
-  return { token, username, sessionReady, login, register, logout, authFetch };
+  const value = { token, username, sessionReady, login, register, logout, authFetch };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthState {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }
 
 export function AuthGate({
