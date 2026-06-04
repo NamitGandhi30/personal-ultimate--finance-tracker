@@ -111,7 +111,9 @@ def create_transaction(
     username: str = Depends(require_auth),
 ) -> TransactionRead:
     try:
-        return TransactionRepository(session, username).create(payload)
+        transaction = TransactionRepository(session, username).create(payload)
+        session.commit()
+        return transaction
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -125,11 +127,12 @@ def update_transaction_trip(
 ) -> TransactionRead:
     try:
         transaction = TransactionRepository(session, username).update_trip(transaction_id, payload)
+        if transaction is None:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        session.commit()
+        return transaction
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    return transaction
 
 
 @app.put("/transactions/{transaction_id}", response_model=TransactionRead)
@@ -141,11 +144,12 @@ def update_transaction(
 ) -> TransactionRead:
     try:
         transaction = TransactionRepository(session, username).update(transaction_id, payload)
+        if transaction is None:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        session.commit()
+        return transaction
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if transaction is None:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    return transaction
 
 
 @app.delete("/transactions/{transaction_id}", status_code=204)
@@ -157,6 +161,7 @@ def delete_transaction(
     deleted = TransactionRepository(session, username).delete(transaction_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Transaction not found")
+    session.commit()
 
 
 @app.get("/trips", response_model=list[TripRead])
@@ -173,7 +178,9 @@ def create_trip(
     session: Session = Depends(get_session),
     username: str = Depends(require_auth),
 ) -> TripRead:
-    return TripRepository(session, username).create(payload)
+    trip = TripRepository(session, username).create(payload)
+    session.commit()
+    return trip
 
 
 @app.put("/trips/{trip_id}", response_model=TripRead)
@@ -186,6 +193,7 @@ def update_trip(
     trip = TripRepository(session, username).update(trip_id, payload)
     if trip is None:
         raise HTTPException(status_code=404, detail="Trip not found")
+    session.commit()
     return trip
 
 
@@ -198,4 +206,5 @@ def delete_trip(
     deleted = TripRepository(session, username).delete(trip_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Trip not found")
+    session.commit()
 

@@ -42,6 +42,7 @@ export default function TripsPage() {
   });
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
   const [editingTripId, setEditingTripId] = useState<number | null>(null);
+  const [isConfirmingDeleteTripId, setIsConfirmingDeleteTripId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<TripForm>({
     name: "",
     destination: "",
@@ -96,6 +97,7 @@ export default function TripsPage() {
     const budget = Number(cleanedBudgetStr || 0);
     if (!name || !destination || !Number.isFinite(budget) || budget < 0) return;
 
+    const previousTrips = trips;
     // Optimistic update
     setTrips((current) =>
       current.map((t) => (t.id === tripId ? { ...t, name, destination, budget } : t))
@@ -113,17 +115,20 @@ export default function TripsPage() {
       setTrips((current) => current.map((t) => (t.id === tripId ? updated : t)));
       setApiStatus("online");
     } catch {
+      setTrips(previousTrips);
       setApiStatus("offline");
     }
   }
 
   async function deleteTrip(tripId: number) {
-    if (!confirm("Are you sure you want to delete this trip? Associated transactions will remain but have their trip workspace unassigned.")) return;
+    const previousTrips = trips;
+    const previousTransactions = transactions;
 
     // Optimistic update
     setTrips((current) => current.filter((t) => t.id !== tripId));
     setTransactions((current) => current.map((tx) => tx.trip_id === tripId ? { ...tx, trip_id: null } : tx));
     setEditingTripId(null);
+    setIsConfirmingDeleteTripId(null);
 
     try {
       const response = await authFetch(`/trips/${tripId}`, {
@@ -132,6 +137,8 @@ export default function TripsPage() {
       if (!response.ok) throw new Error("Failed to delete trip");
       setApiStatus("online");
     } catch {
+      setTrips(previousTrips);
+      setTransactions(previousTransactions);
       setApiStatus("offline");
     }
   }
@@ -152,6 +159,7 @@ export default function TripsPage() {
       created_at: new Date().toISOString(),
     };
 
+    const previousTrips = trips;
     setTrips((current) => [optimisticTrip, ...current]);
     setTripForm({ name: "", destination: "", budget: "" });
 
@@ -166,6 +174,7 @@ export default function TripsPage() {
       setTrips((current) => [saved, ...current.filter((trip) => trip.id !== optimisticTrip.id)]);
       setApiStatus("online");
     } catch {
+      setTrips(previousTrips);
       setApiStatus("offline");
     }
   }
@@ -256,6 +265,24 @@ export default function TripsPage() {
                 const remaining = Math.max(0, trip.budget - spent);
                 const progress = trip.budget <= 0 ? 0 : Math.min(100, (spent / trip.budget) * 100);
                 const isEditing = editingTripId === trip.id;
+                const isConfirmingDelete = isConfirmingDeleteTripId === trip.id;
+
+                if (isConfirmingDelete) {
+                  return (
+                    <article className="trip-card edit-mode" key={trip.id}>
+                      <div className="trip-card-edit-form">
+                        <strong>Delete trip?</strong>
+                        <p className="subcopy" style={{ marginTop: 0, fontSize: '13px' }}>
+                          Associated transactions will remain but have their trip workspace unassigned.
+                        </p>
+                        <div className="trip-card-actions">
+                          <button className="danger-btn" onClick={() => deleteTrip(trip.id)}>Delete</button>
+                          <button className="ghost-btn" onClick={() => setIsConfirmingDeleteTripId(null)}>Cancel</button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                }
 
                 if (isEditing) {
                   return (
@@ -285,7 +312,7 @@ export default function TripsPage() {
                         <div className="trip-card-actions">
                           <button className="save-btn" onClick={() => saveTripEdit(trip.id)}>Save</button>
                           <button className="ghost-btn" onClick={() => setEditingTripId(null)}>Cancel</button>
-                          <button className="danger-btn" onClick={() => deleteTrip(trip.id)}>Delete</button>
+                          <button className="danger-btn" onClick={() => setIsConfirmingDeleteTripId(trip.id)}>Delete</button>
                         </div>
                       </div>
                     </article>
