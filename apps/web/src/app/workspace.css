@@ -1,3 +1,28 @@
+/* Sleek Custom Scrollbars Globally */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222222;
+  border-radius: 99px;
+  border: 2px solid #000000;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--green);
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #222222 #000000;
+}
+
 .workspace {
   width: min(1120px, calc(100vw - 32px));
   margin: 0 auto;
@@ -1415,114 +1440,133 @@ h2 {
 }
 
 /* Calendar Widget Styling */
+/* Calendar Widget Styling - Premium Dashboard Redesign */
 .calendar-panel {
   position: relative;
-  margin-bottom: 24px;
-  padding: 24px;
+  margin-bottom: 32px;
+  padding: 28px;
+  background: linear-gradient(145deg, #161616, #0e0e0e);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  border-radius: 16px;
 }
 
 .calendar-panel-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  align-items: flex-end;
+  margin-bottom: 24px;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 20px;
 }
 
 .filter-presets {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .preset-btn {
-  background: #222222;
-  border: 1px solid var(--line);
+  background: transparent;
+  border: 0;
   color: var(--muted);
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
-  font-weight: 800;
-  padding: 6px 12px;
+  font-weight: 700;
+  padding: 8px 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .preset-btn:hover {
-  background: #2b2b2b;
+  background: rgba(255, 255, 255, 0.05);
   color: var(--foreground);
 }
 
 .preset-btn.active {
   background: var(--green);
-  border-color: var(--green);
   color: #000000;
-  font-weight: 900;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
 }
 
 .calendar-workspace {
-  background: #111111;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 20px;
 }
 
 .calendar-month-selector {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .month-nav-btn {
-  background: #222222;
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--foreground);
-  font-size: 16px;
-  font-weight: bold;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .month-nav-btn:hover {
-  background: #2b2b2b;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.month-nav-btn:active {
+  transform: translateY(1px);
 }
 
 .current-month-label {
-  font-size: 16px;
-  font-weight: 900;
-  letter-spacing: -0.2px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--foreground);
+  background: linear-gradient(120deg, #ffffff, #a3a3a3);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .calendar-labels {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   text-align: center;
-  font-size: 12px;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 800;
   color: var(--muted);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  opacity: 0.6;
 }
 
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
 
 .calendar-cell {
-  aspect-ratio: 1;
-  background: transparent;
-  border: 0;
+  aspect-ratio: 1.1;
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid rgba(255, 255, 255, 0.02);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -1530,105 +1574,136 @@ h2 {
   justify-content: center;
   position: relative;
   font-size: 14px;
-  font-weight: 700;
-  color: var(--foreground);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .calendar-cell.empty {
+  background: transparent;
+  border-color: transparent;
   cursor: default;
   pointer-events: none;
 }
 
 .calendar-cell.day:hover {
-  background: #222222;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  transform: scale(1.02);
+  z-index: 2;
 }
 
-/* Range Selection Styling */
-.calendar-cell.range-start,
+/* Range Selection Styling - Connected High Tech aesthetics */
+.calendar-cell.range-start {
+  background: var(--green) !important;
+  color: #000000 !important;
+  border-color: var(--green) !important;
+  font-weight: 800;
+  border-radius: 8px 0 0 8px;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+  z-index: 2;
+}
+
 .calendar-cell.range-end {
   background: var(--green) !important;
   color: #000000 !important;
-  border-radius: 8px;
+  border-color: var(--green) !important;
+  font-weight: 800;
+  border-radius: 0 8px 8px 0;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+  z-index: 2;
+}
+
+/* Single date selection */
+.calendar-cell.range-start.range-end {
+  border-radius: 8px !important;
 }
 
 .calendar-cell.in-range {
-  background: rgba(16, 185, 129, 0.15) !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
   border-radius: 0;
+  color: #ffffff;
 }
 
 /* Dynamic Dot Markings */
 .day-dot {
   position: absolute;
-  bottom: 6px;
-  width: 5px;
-  height: 5px;
+  bottom: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
 }
 
 .day-dot.profit {
   background-color: var(--green);
-  box-shadow: 0 0 4px var(--green);
+  box-shadow: 0 0 8px var(--green);
 }
 
 .day-dot.spend {
   background-color: var(--amber);
+  box-shadow: 0 0 6px var(--amber);
 }
 
 .day-dot.high-spend {
   background-color: #ef4444;
-  box-shadow: 0 0 4px #ef4444;
+  box-shadow: 0 0 10px #ef4444;
 }
 
-/* Calendar Tooltip */
+/* Calendar Tooltip - High Quality Glassmorphism */
 .calendar-tooltip {
   position: absolute;
   transform: translate(-50%, -100%);
-  background: rgba(22, 22, 22, 0.95);
-  border: 1px solid var(--line);
-  padding: 10px 14px;
-  border-radius: 8px;
+  background: rgba(18, 18, 18, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 16px;
+  border-radius: 12px;
   font-size: 13px;
   color: var(--foreground);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
   pointer-events: none;
   z-index: 50;
   white-space: nowrap;
-  backdrop-filter: blur(8px);
-  transition: left 0.1s ease, top 0.1s ease;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: left 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .tooltip-title {
   font-weight: 800;
-  margin-bottom: 6px;
-  color: var(--muted);
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 4px;
-  font-size: 11px;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
 .tooltip-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .tooltip-row.spend {
-  color: #f59e0b;
+  color: #fbbf24;
+  font-weight: 600;
 }
 
 .tooltip-row.income {
-  color: var(--green);
+  color: #34d399;
+  font-weight: 600;
 }
 
 .tooltip-row.net {
-  font-weight: 900;
-  border-top: 1px solid var(--line);
-  margin-top: 4px;
-  padding-top: 4px;
+  font-weight: 800;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 6px;
+  padding-top: 6px;
+  color: #ffffff;
 }
 
 .calendar-footer {
@@ -1637,52 +1712,266 @@ h2 {
   align-items: center;
   flex-wrap: wrap;
   gap: 16px;
-  margin-top: 14px;
+  margin-top: 20px;
   font-size: 13px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 16px;
 }
 
 .active-filter-badge {
-  background: #222222;
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--foreground);
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 20px;
-  font-weight: 800;
+  font-weight: 700;
+  font-size: 12px;
 }
 
 .legend-row {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   flex-wrap: wrap;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .legend-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   display: inline-block;
 }
 
 .legend-dot.profit {
   background-color: var(--green);
+  box-shadow: 0 0 6px var(--green);
 }
 
 .legend-dot.spend {
   background-color: var(--amber);
+  box-shadow: 0 0 5px var(--amber);
 }
 
 .legend-dot.high-spend {
   background-color: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
 }
 
+/* Custom Date Picker Premium Styling */
+.custom-datepicker-container {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
 
+/* Specificity Reset to prevent .quick-entry button styling leak */
+.custom-datepicker-container button,
+.custom-datepicker-container .quick-entry-date-trigger,
+.custom-datepicker-container .datepicker-nav-btn,
+.custom-datepicker-container .datepicker-cell.day,
+.custom-datepicker-container .datepicker-today-btn {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  font-weight: inherit;
+  min-height: unset;
+  padding: 0;
+  box-shadow: none;
+  transition: all 0.2s ease;
+}
 
+.quick-entry-date-trigger {
+  background: #222222 !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  color: var(--foreground) !important;
+  font-weight: 600 !important;
+  min-height: 42px !important;
+  outline: 0 !important;
+  padding: 0 14px !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  font-size: 14px;
+}
+
+.quick-entry-date-trigger:hover {
+  background: #2b2b2b !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.custom-datepicker-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: rgba(18, 18, 18, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  padding: 16px;
+  z-index: 100;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: pickerFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes pickerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.datepicker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.datepicker-selects {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* Premium styled Select dropdown menus inside Custom DatePicker */
+.datepicker-select {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 24px 4px 8px;
+  cursor: pointer;
+  outline: none;
+  min-height: unset !important;
+  width: auto;
+  /* Custom styled chevron arrow */
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='rgba(255, 255, 255, 0.6)' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 11px;
+  transition: all 0.2s;
+}
+
+.datepicker-select:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.datepicker-select option {
+  background: #121212;
+  color: var(--foreground);
+}
+
+.datepicker-nav-btn {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  color: var(--foreground) !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.datepicker-nav-btn:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.datepicker-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.datepicker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.datepicker-cell {
+  aspect-ratio: 1;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8) !important;
+  cursor: pointer;
+}
+
+.datepicker-cell.empty {
+  cursor: default;
+  pointer-events: none;
+}
+
+.datepicker-cell.day:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+.datepicker-cell.day.selected {
+  background: var(--green) !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+}
+
+.datepicker-cell.day.today {
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+
+.datepicker-cell.day.today:not(.selected) {
+  color: var(--green) !important;
+}
+
+.datepicker-footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 10px;
+  display: flex;
+  justify-content: center;
+}
+
+.datepicker-today-btn {
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--green) !important;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+}
+
+.datepicker-today-btn:hover {
+  background: rgba(16, 185, 129, 0.08) !important;
+}

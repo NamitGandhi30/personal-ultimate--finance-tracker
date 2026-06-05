@@ -1147,6 +1147,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     return names[monthNum];
   }
 
+  String _monthAbbr(int monthNum) => _monthName(monthNum);
+
   Widget _buildPresetChip(String preset, String label) {
     final isActive = (preset == 'all' && _filterStartDate == null && _filterEndDate == null) ||
         (preset == 'today' && _isTodaySelected()) ||
@@ -1436,33 +1438,82 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             // Quick entry box
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF161616),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF222222)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.flash_on, color: Color(0xFF10B981)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        onSubmitted: (_) => _submitLog(),
-                        decoration: const InputDecoration(
-                          hintText: 'Try "250 lunch" or "earned 50000 salary"',
-                          border: InputBorder.none,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF161616),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF222222)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.flash_on, color: Color(0xFF10B981)),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextField(
+                            controller: _controller,
+                            onSubmitted: (_) => _submitLog(),
+                            decoration: const InputDecoration(
+                              hintText: 'Try "250 lunch" or "earned 50000 salary"',
+                              border: InputBorder.none,
+                            ),
+                          ),
                         ),
-                      ),
+                        // Date chip button
+                        GestureDetector(
+                          onTap: _pickLogDate,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: _logDate != null
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                                  : const Color(0xFF222222),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _logDate != null
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFF333333),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 13,
+                                  color: _logDate != null
+                                      ? const Color(0xFF10B981)
+                                      : Colors.grey,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  _logDate != null
+                                      ? '${_logDate!.day} ${_monthAbbr(_logDate!.month)}'
+                                      : 'Today',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: _logDate != null
+                                        ? const Color(0xFF10B981)
+                                        : Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(Icons.add, color: Color(0xFF10B981)),
+                          onPressed: _submitLog,
+                        ),
+                      ],
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.add, color: Color(0xFF10B981)),
-                      onPressed: _submitLog,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             Expanded(

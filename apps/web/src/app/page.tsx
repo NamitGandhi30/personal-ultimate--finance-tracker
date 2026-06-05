@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AuthGate, useAuth } from "./auth-client";
 import { EditableTransactionRow, TransactionPayload } from "./transaction-row";
+import { CustomDatePicker } from "./custom-date-picker";
 import "./workspace.css";
 
 type Transaction = {
@@ -296,12 +297,9 @@ export default function Home() {
             onChange={(event) => setQuickEntry(event.target.value)}
             placeholder='Try "250 lunch", "petrol 800", or "earned 50000 salary"'
           />
-          <input
-            type="date"
-            aria-label="Transaction date"
+          <CustomDatePicker
             value={logDate}
-            onChange={(event) => setLogDate(event.target.value)}
-            className="quick-entry-date"
+            onChange={(val) => setLogDate(val)}
           />
           <select
             aria-label="Attach expense to trip"

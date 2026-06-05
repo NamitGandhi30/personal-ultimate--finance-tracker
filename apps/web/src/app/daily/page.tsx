@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AuthGate, useAuth } from "../auth-client";
 import { EditableTransactionRow, TransactionPayload } from "../transaction-row";
+import { CustomDatePicker } from "../custom-date-picker";
 import "../workspace.css";
 
 type Transaction = {
@@ -361,12 +362,9 @@ export default function DailyPage() {
             onChange={(event) => setQuickEntry(event.target.value)}
             placeholder='Try "250 lunch", "petrol 800", or "earned 50000 salary"'
           />
-          <input
-            type="date"
-            aria-label="Transaction date"
+          <CustomDatePicker
             value={logDate}
-            onChange={(event) => setLogDate(event.target.value)}
-            className="quick-entry-date"
+            onChange={(val) => setLogDate(val)}
           />
           <button type="submit">Add daily</button>
         </form>
@@ -389,9 +387,17 @@ export default function DailyPage() {
 
           <div className="calendar-workspace">
             <div className="calendar-month-selector">
-              <button className="month-nav-btn" onClick={handlePrevMonth}>&lt;</button>
+              <button type="button" className="month-nav-btn" onClick={handlePrevMonth} aria-label="Previous Month">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
               <span className="current-month-label">{monthNames[month]} {year}</span>
-              <button className="month-nav-btn" onClick={handleNextMonth}>&gt;</button>
+              <button type="button" className="month-nav-btn" onClick={handleNextMonth} aria-label="Next Month">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
             </div>
 
             <div className="calendar-labels">

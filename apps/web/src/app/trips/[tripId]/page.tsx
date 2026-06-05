@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AuthGate, useAuth } from "../../auth-client";
 import { EditableTransactionRow, TransactionPayload } from "../../transaction-row";
+import { CustomDatePicker } from "../../custom-date-picker";
 import "../../workspace.css";
 
 type Transaction = {
@@ -191,12 +192,9 @@ export default function TripPage() {
           onChange={(event) => setQuickEntry(event.target.value)}
           placeholder={`Add ${trip?.name ?? "trip"} expense, e.g. "1500 airport cab"`}
         />
-        <input
-          type="date"
-          aria-label="Transaction date"
+        <CustomDatePicker
           value={logDate}
-          onChange={(event) => setLogDate(event.target.value)}
-          className="quick-entry-date"
+          onChange={(val) => setLogDate(val)}
         />
         <button type="submit">Add to trip</button>
       </form>
