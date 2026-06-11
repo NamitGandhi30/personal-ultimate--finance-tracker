@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 
 export type Transaction = {
@@ -11,14 +12,21 @@ export type Transaction = {
   date: string;
   is_income: boolean;
   trip_id?: number | null;
+  
+  // fixed transaction properties
+  is_fixed?: boolean;
+  fixed_id?: number | null;
+  status?: string;
+  occurrence_date?: string | null;
 };
 
-export type TransactionPayload = Omit<Transaction, "id" | "date">;
+export type TransactionPayload = Omit<Transaction, "id" | "date" | "is_fixed" | "fixed_id" | "status" | "occurrence_date">;
 
 export type Trip = {
   id: number;
   name: string;
   destination: string;
+  border?: number;
   budget: number;
   created_at: string;
 };
@@ -38,16 +46,27 @@ export function EditableTransactionRow({
   tripNames,
   onSave,
   onDelete,
+  onSaveOverride,
 }: {
   transaction: Transaction;
   trips: Trip[];
   tripNames?: Record<number, string>;
   onSave: (transactionId: number, payload: TransactionPayload) => Promise<void>;
   onDelete: (transactionId: number) => Promise<void>;
+  onSaveOverride?: (fixedId: number, occurrenceDate: string, status: string, actualDate?: string | null) => Promise<void>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [form, setForm] = useState<EditForm>(() => toForm(transaction));
+
+  // State for fixed overrides
+  const [statusState, setStatusState] = useState(transaction.status || "scheduled");
+  const [actualDateState, setActualDateState] = useState(() => {
+    if (transaction.date) {
+      return new Date(transaction.date).toISOString().split("T")[0];
+    }
+    return transaction.occurrence_date || new Date().toISOString().split("T")[0];
+  });
 
   async function saveEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -71,6 +90,23 @@ export function EditableTransactionRow({
 
   async function deleteRow() {
     await onDelete(transaction.id);
+  }
+
+  async function handleStatusChange(newStatus: string) {
+    setStatusState(newStatus);
+    if (onSaveOverride && transaction.fixed_id && transaction.occurrence_date) {
+      const actualDateVal = ["paid_prior", "delayed"].includes(newStatus)
+        ? new Date(actualDateState).toISOString()
+        : null;
+      await onSaveOverride(transaction.fixed_id, transaction.occurrence_date, newStatus, actualDateVal);
+    }
+  }
+
+  async function handleActualDateChange(newDateStr: string) {
+    setActualDateState(newDateStr);
+    if (onSaveOverride && transaction.fixed_id && transaction.occurrence_date) {
+      await onSaveOverride(transaction.fixed_id, transaction.occurrence_date, statusState, new Date(newDateStr).toISOString());
+    }
   }
 
   if (isEditing) {
@@ -129,6 +165,59 @@ export function EditableTransactionRow({
           </button>
         </div>
       </form>
+    );
+  }
+
+  if (transaction.is_fixed) {
+    return (
+      <article className={`transaction ${statusState === "cancelled" ? "status-cancelled" : ""}`}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <span className={transaction.is_income ? "badge income" : "badge spend"}>
+            {transaction.is_income ? "In" : "Out"}
+          </span>
+          <span className="badge fixed">Fixed</span>
+        </div>
+        <div>
+          <strong>{transaction.description}</strong>
+          <small>
+            {transaction.category} / {transaction.merchant}
+          </small>
+          <div className="status-override-container">
+            <select
+              aria-label="Status override"
+              className={`status-override-select ${statusState}`}
+              value={statusState}
+              onChange={(e) => handleStatusChange(e.target.value)}
+            >
+              <option value="scheduled">Scheduled</option>
+              <option value="paid">Paid</option>
+              <option value="paid_prior">Early Pay</option>
+              <option value="delayed">Delay Payment</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+            {["paid_prior", "delayed"].includes(statusState) && (
+              <input
+                type="date"
+                className="status-override-date-picker"
+                value={actualDateState}
+                onChange={(e) => handleActualDateChange(e.target.value)}
+              />
+            )}
+            <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+              Series on {new Date(transaction.occurrence_date + "T00:00:00").toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
+            </span>
+          </div>
+        </div>
+        <b className={transaction.is_income ? "money income-text" : "money"}>
+          {transaction.is_income ? "+" : "-"}
+          {formatMoney(statusState === "cancelled" ? 0 : transaction.amount)}
+        </b>
+        <div className="transaction-actions" style={{ minWidth: "120px" }}>
+          <Link href="/fixed" style={{ fontSize: "11px", color: "var(--green)", textDecoration: "underline" }}>
+            Edit Series
+          </Link>
+        </div>
+      </article>
     );
   }
 
@@ -220,3 +309,5 @@ function toPayload(form: EditForm): TransactionPayload | null {
 function formatMoney(value: number) {
   return `Rs ${Math.round(value).toLocaleString("en-IN")}`;
 }
+
+

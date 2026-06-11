@@ -16,6 +16,10 @@ type Transaction = {
   date: string;
   is_income: boolean;
   trip_id?: number | null;
+  is_fixed?: boolean;
+  fixed_id?: number | null;
+  status?: string;
+  occurrence_date?: string | null;
 };
 
 type CreateTransaction = Omit<Transaction, "id" | "date"> & { date?: string };
@@ -66,8 +70,9 @@ export default function Home() {
   const [quickEntry, setQuickEntry] = useState("");
   const [selectedTripId, setSelectedTripId] = useState("");
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [transactions, setTransactions] = useState<Transaction[]>(seedTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
 
   useEffect(() => {
@@ -85,6 +90,8 @@ export default function Home() {
         setApiStatus("online");
       } catch {
         setApiStatus("offline");
+      } finally {
+        setIsLoading(false);
       }
     }
 
@@ -132,6 +139,50 @@ export default function Home() {
     return Object.values(tripSpendTotals).reduce((sum, value) => sum + value, 0);
   }, [tripSpendTotals]);
 
+  const monthlyBreakdown = useMemo(() => {
+    const result: {
+      year: number;
+      month: number;
+      label: string;
+      income: number;
+      spend: number;
+    }[] = [];
+    const today = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      result.push({
+        year: d.getFullYear(),
+        month: d.getMonth(),
+        label: d.toLocaleDateString("en-US", { month: "short" }),
+        income: 0,
+        spend: 0,
+      });
+    }
+
+    transactions.forEach((t) => {
+      const txDate = new Date(t.date);
+      const txYear = txDate.getFullYear();
+      const txMonth = txDate.getMonth();
+
+      const target = result.find((r) => r.year === txYear && r.month === txMonth);
+      if (target) {
+        if (t.is_income) {
+          target.income += t.amount;
+        } else {
+          target.spend += t.amount;
+        }
+      }
+    });
+
+    const maxVal = Math.max(...result.map((r) => Math.max(r.income, r.spend)), 1);
+
+    return result.map((r) => ({
+      ...r,
+      incomeHeight: r.income > 0 ? `${Math.max(5, (r.income / maxVal) * 100)}%` : "0%",
+      spendHeight: r.spend > 0 ? `${Math.max(5, (r.spend / maxVal) * 100)}%` : "0%",
+    }));
+  }, [transactions]);
+
   async function submitQuickEntry(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsed = parseQuickEntry(quickEntry);
@@ -154,10 +205,12 @@ export default function Home() {
     setTransactions((current) => [optimisticTransaction, ...current]);
 
     try {
+      // Send an empty category so the server auto-categorizes (learned rules +
+      // AI); the optimistic row keeps the local keyword guess until then.
       const response = await authFetch("/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, category: payload.is_income ? "Income" : "" }),
       });
       if (!response.ok) throw new Error("Failed to save transaction");
       const saved = (await response.json()) as Transaction;
@@ -207,13 +260,13 @@ export default function Home() {
   const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "None";
   const savingsRate = monthIncome <= 0 ? 0 : Math.max(0, Math.round(((monthIncome - monthSpend) / monthIncome) * 100));
 
-  const currentPortfolioValue = 45250.25 + (monthIncome - monthSpend);
+  const currentPortfolioValue = monthIncome - monthSpend;
   const netMonthlyChange = monthIncome - monthSpend;
   const portfolioChangeText = `${netMonthlyChange >= 0 ? "+" : ""}${formatMoney(netMonthlyChange)} this month`;
 
   // SVG Line Chart computation
   const balanceHistory = useMemo(() => {
-    let running = 42400; // Base offset to start line chart
+    let running = 0; // Starts from 0 for clean accounts
     const sorted = [...transactions]
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     return sorted.map((t) => {
@@ -223,7 +276,7 @@ export default function Home() {
   }, [transactions]);
 
   const { pathD, areaD } = useMemo(() => {
-    const data = balanceHistory.length > 1 ? balanceHistory : [42400, 43500, 42800, 44200, 45250];
+    const data = balanceHistory.length > 1 ? balanceHistory : [0, 0, 0, 0, 0];
     const minVal = Math.min(...data) * 0.98;
     const maxVal = Math.max(...data) * 1.02;
     const range = maxVal - minVal || 1;
@@ -320,10 +373,10 @@ export default function Home() {
         <div className="premium-portfolio-card">
           <div className="portfolio-header">
             <p>Total Portfolio</p>
-            <h2>{formatMoney(currentPortfolioValue)}</h2>
-            <p className="portfolio-change">{portfolioChangeText}</p>
+            <h2>{isLoading ? "..." : formatMoney(currentPortfolioValue)}</h2>
+            <p className="portfolio-change">{isLoading ? "Loading your portfolio..." : portfolioChangeText}</p>
           </div>
-          <div className="portfolio-graph">
+          <div className="portfolio-graph" style={{ opacity: isLoading ? 0.25 : 1, transition: "opacity 0.3s ease" }}>
             <svg viewBox="0 0 1000 180" width="100%" height="100%" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="graphGradient" x1="0" y1="0" x2="0" y2="1">
@@ -345,8 +398,8 @@ export default function Home() {
               <h2>Manage trip workspaces</h2>
             </div>
             <div className="action-panel-metrics">
-              <span>{trips.length} trips</span>
-              <strong>{formatMoney(tripSpend)}</strong>
+              <span>{isLoading ? "..." : `${trips.length} trips`}</span>
+              <strong>{isLoading ? "..." : formatMoney(tripSpend)}</strong>
             </div>
           </Link>
           <Link className="panel action-panel" href="/daily">
@@ -355,8 +408,8 @@ export default function Home() {
               <h2>General spend</h2>
             </div>
             <div className="action-panel-metrics">
-              <span>{generalTransactions.filter((item) => !item.is_income).length} expenses</span>
-              <strong>{formatMoney(generalTransactions.filter((item) => !item.is_income).reduce((sum, item) => sum + item.amount, 0))}</strong>
+              <span>{isLoading ? "..." : `${generalTransactions.filter((item) => !item.is_income).length} expenses`}</span>
+              <strong>{isLoading ? "..." : formatMoney(generalTransactions.filter((item) => !item.is_income).reduce((sum, item) => sum + item.amount, 0))}</strong>
             </div>
           </Link>
         </section>
@@ -412,50 +465,17 @@ export default function Home() {
               <h3>Income vs Expenses</h3>
               <p>Last 6 months overview</p>
             </div>
-            <div className="bar-chart-container">
+            <div className="bar-chart-container" style={{ opacity: isLoading ? 0.35 : 1, transition: "opacity 0.3s" }}>
               {/* Render dynamic bars for last months */}
-              <div className="chart-bar-group">
-                <div className="bar-dual-tracks">
-                  <div className="bar-track-single income" style={{ height: "45%" }} />
-                  <div className="bar-track-single expenses" style={{ height: "30%" }} />
+              {monthlyBreakdown.map((item, idx) => (
+                <div className="chart-bar-group" key={idx}>
+                  <div className="bar-dual-tracks">
+                    <div className="bar-track-single income" style={{ height: item.incomeHeight }} title={`Income: Rs ${item.income}`} />
+                    <div className="bar-track-single expenses" style={{ height: item.spendHeight }} title={`Expenses: Rs ${item.spend}`} />
+                  </div>
+                  <span className="bar-month-label">{item.label}</span>
                 </div>
-                <span className="bar-month-label">Jan</span>
-              </div>
-              <div className="chart-bar-group">
-                <div className="bar-dual-tracks">
-                  <div className="bar-track-single income" style={{ height: "55%" }} />
-                  <div className="bar-track-single expenses" style={{ height: "40%" }} />
-                </div>
-                <span className="bar-month-label">Feb</span>
-              </div>
-              <div className="chart-bar-group">
-                <div className="bar-dual-tracks">
-                  <div className="bar-track-single income" style={{ height: "70%" }} />
-                  <div className="bar-track-single expenses" style={{ height: "50%" }} />
-                </div>
-                <span className="bar-month-label">Mar</span>
-              </div>
-              <div className="chart-bar-group">
-                <div className="bar-dual-tracks">
-                  <div className="bar-track-single income" style={{ height: "80%" }} />
-                  <div className="bar-track-single expenses" style={{ height: "65%" }} />
-                </div>
-                <span className="bar-month-label">Apr</span>
-              </div>
-              <div className="chart-bar-group">
-                <div className="bar-dual-tracks">
-                  <div className="bar-track-single income" style={{ height: "60%" }} />
-                  <div className="bar-track-single expenses" style={{ height: "45%" }} />
-                </div>
-                <span className="bar-month-label">May</span>
-              </div>
-              <div className="chart-bar-group">
-                <div className="bar-dual-tracks">
-                  <div className="bar-track-single income" style={{ height: `${Math.min(100, Math.max(5, (monthIncome / 100000) * 100))}%` }} />
-                  <div className="bar-track-single expenses" style={{ height: `${Math.min(100, Math.max(5, (monthSpend / 100000) * 100))}%` }} />
-                </div>
-                <span className="bar-month-label">Jun</span>
-              </div>
+              ))}
             </div>
             <div className="bar-legend-inline">
               <div className="legend-label-group"><span className="legend-dot" style={{ backgroundColor: "#10b981" }} /><span>Income</span></div>
@@ -524,29 +544,40 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.slice(0, 4).map((t) => (
-                  <tr key={t.id}>
-                    <td>
-                      <div className="table-desc-cell">
-                        <div className="avatar-icon-square">
-                          {t.is_income ? "📥" : "💸"}
+                {transactions.slice(0, 4).map((t) => {
+                  const isCancelled = t.is_fixed && t.status === "cancelled";
+                  return (
+                    <tr key={t.id} style={isCancelled ? { opacity: 0.45 } : {}}>
+                      <td>
+                        <div className="table-desc-cell">
+                          <div className="avatar-icon-square">
+                            {t.is_fixed ? "🔁" : (t.is_income ? "📥" : "💸")}
+                          </div>
+                          <div>
+                            <strong style={isCancelled ? { textDecoration: "line-through" } : {}}>{t.description}</strong>
+                            <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>
+                              {t.category} {t.is_fixed && <span style={{ color: "#a78bfa" }}>&bull; Fixed</span>}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <strong>{t.description}</strong>
-                          <div style={{ fontSize: "11px", color: "var(--muted)", marginTop: "2px" }}>{t.category}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ fontWeight: 600, color: t.is_income ? "var(--green)" : "inherit" }}>
-                      {t.is_income ? "+" : "-"}{formatMoney(t.amount)}
-                    </td>
-                    <td>
-                      <span className={`badge ${t.id % 2 === 0 ? "pending" : "completed"}`}>
-                        {t.id % 2 === 0 ? "Pending" : "Completed"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td style={{ fontWeight: 600, color: t.is_income ? "var(--green)" : "inherit", textDecoration: isCancelled ? "line-through" : "none" }}>
+                        {t.is_income ? "+" : "-"}{formatMoney(t.amount)}
+                      </td>
+                      <td>
+                        {t.is_fixed ? (
+                          <span className={`badge ${t.status === "cancelled" ? "spend" : (t.status === "paid" || t.status === "paid_prior" ? "income" : "pending")}`}>
+                            {t.status === "paid_prior" ? "Paid Prior" : (t.status ? t.status.charAt(0).toUpperCase() + t.status.slice(1) : "Scheduled")}
+                          </span>
+                        ) : (
+                          <span className={`badge ${t.id % 2 === 0 ? "pending" : "completed"}`}>
+                            {t.id % 2 === 0 ? "Pending" : "Completed"}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -1,16 +1,24 @@
 from contextlib import asynccontextmanager
 from typing import Iterator
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from app.auth import create_token, require_auth
+from app.categorization import categorize
 from app.database import check_db, database_kind, init_db, session_scope
-from app.repositories import TransactionRepository, TripRepository, UserRepository
+from app.intelligence import build_forecast, build_historical_insights, scan_receipt
+from app.repositories import TransactionRepository, TripRepository, UserRepository, FixedTransactionRepository, FixedTransactionOverrideRepository
 from app.schemas import (
+    CategorizeRequest,
+    CategorizeResponse,
+    ForecastResponse,
+    HistoricalInsightsResponse,
     LoginRequest,
     LoginResponse,
+    ReceiptScanRequest,
+    ReceiptScanResponse,
     RegisterRequest,
     TransactionCreate,
     TransactionRead,
@@ -20,6 +28,11 @@ from app.schemas import (
     TripRead,
     TripUpdate,
     UserRead,
+    FixedTransactionCreate,
+    FixedTransactionRead,
+    FixedTransactionUpdate,
+    FixedTransactionOverrideCreate,
+    FixedTransactionOverrideRead,
 )
 
 
@@ -94,6 +107,57 @@ def me(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return user
+
+
+@app.post("/categorize", response_model=CategorizeResponse)
+def categorize_transaction(
+    payload: CategorizeRequest,
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> CategorizeResponse:
+    user = UserRepository(session).get_by_username(username)
+    suggestion = categorize(
+        session,
+        user,
+        payload.description,
+        merchant=payload.merchant,
+        is_income=payload.is_income,
+    )
+    return CategorizeResponse(**suggestion)
+
+
+@app.post("/receipts/scan", response_model=ReceiptScanResponse)
+def scan_receipt_endpoint(
+    payload: ReceiptScanRequest,
+    username: str = Depends(require_auth),
+) -> ReceiptScanResponse:
+    if not (payload.image_base64 or "").strip() and not (payload.extracted_text or "").strip():
+        raise HTTPException(status_code=400, detail="Provide image_base64 or extracted_text")
+    return scan_receipt(
+        image_base64=payload.image_base64,
+        extracted_text=payload.extracted_text,
+        filename=payload.filename,
+        use_ai_parser=payload.use_ai_parser,
+    )
+
+
+@app.get("/insights/forecast", response_model=ForecastResponse)
+def forecast_insights(
+    horizon_days: int = Query(default=30, ge=1, le=90),
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> ForecastResponse:
+    transactions = TransactionRepository(session, username).list()
+    return build_forecast(transactions, horizon_days=horizon_days)
+
+
+@app.get("/insights/history", response_model=HistoricalInsightsResponse)
+def historical_insights(
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> HistoricalInsightsResponse:
+    transactions = TransactionRepository(session, username).list()
+    return build_historical_insights(transactions)
 
 
 @app.get("/transactions", response_model=list[TransactionRead])
@@ -207,4 +271,64 @@ def delete_trip(
     if not deleted:
         raise HTTPException(status_code=404, detail="Trip not found")
     session.commit()
+
+
+@app.get("/fixed-transactions", response_model=list[FixedTransactionRead])
+def list_fixed_transactions(
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> list[FixedTransactionRead]:
+    return FixedTransactionRepository(session, username).list()
+
+
+@app.post("/fixed-transactions", response_model=FixedTransactionRead)
+def create_fixed_transaction(
+    payload: FixedTransactionCreate,
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> FixedTransactionRead:
+    fixed = FixedTransactionRepository(session, username).create(payload)
+    session.commit()
+    return fixed
+
+
+@app.put("/fixed-transactions/{fixed_id}", response_model=FixedTransactionRead)
+def update_fixed_transaction(
+    fixed_id: int,
+    payload: FixedTransactionUpdate,
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> FixedTransactionRead:
+    fixed = FixedTransactionRepository(session, username).update(fixed_id, payload)
+    if fixed is None:
+        raise HTTPException(status_code=404, detail="Fixed transaction not found")
+    session.commit()
+    return fixed
+
+
+@app.delete("/fixed-transactions/{fixed_id}", status_code=204)
+def delete_fixed_transaction(
+    fixed_id: int,
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> None:
+    deleted = FixedTransactionRepository(session, username).delete(fixed_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Fixed transaction not found")
+    session.commit()
+
+
+@app.post("/fixed-transactions/overrides", response_model=FixedTransactionOverrideRead)
+def create_or_update_override(
+    payload: FixedTransactionOverrideCreate,
+    session: Session = Depends(get_session),
+    username: str = Depends(require_auth),
+) -> FixedTransactionOverrideRead:
+    try:
+        override = FixedTransactionOverrideRepository(session, username).create_or_update(payload)
+        session.commit()
+        return override
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
 

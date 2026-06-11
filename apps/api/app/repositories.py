@@ -4,8 +4,15 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.auth import AUTH_PASSWORD, AUTH_USERNAME, hash_password, verify_password
-from app.models import TransactionModel, TripModel, UserModel
-from app.schemas import RegisterRequest, TransactionCreate, TransactionTripUpdate, TransactionUpdate, TripCreate, TripUpdate
+from app.categorization import AUTO_CATEGORY_VALUES, categorize, learn_correction
+from app.models import TransactionModel, TripModel, UserModel, FixedTransactionModel, FixedTransactionOverrideModel
+from app.schemas import RegisterRequest, TransactionCreate, TransactionTripUpdate, TransactionUpdate, TripCreate, TripUpdate, FixedTransactionCreate, FixedTransactionUpdate, FixedTransactionOverrideCreate
+
+
+class VirtualTransaction:
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
 
 class TransactionRepository:
@@ -14,20 +21,149 @@ class TransactionRepository:
         self.user = UserRepository(session).get_by_username(username) if username else None
 
     def list(self) -> list[TransactionModel]:
+        import calendar
+        from datetime import datetime, timezone, timedelta
+
+        # Get manual transactions
         statement = select(TransactionModel).order_by(TransactionModel.date.desc())
         if self.user is not None:
             statement = statement.where(TransactionModel.user_id == self.user.id)
-        return list(self.session.scalars(statement).all())
+        manual_txs = list(self.session.scalars(statement).all())
+
+        # If no user logged in, just return manual ones
+        if self.user is None:
+            return manual_txs
+
+        # Get fixed transactions for this user
+        fixed_statement = select(FixedTransactionModel).where(FixedTransactionModel.user_id == self.user.id)
+        fixed_list = list(self.session.scalars(fixed_statement).all())
+
+        # Get overrides
+        override_statement = select(FixedTransactionOverrideModel).join(FixedTransactionModel).where(FixedTransactionModel.user_id == self.user.id)
+        overrides = list(self.session.scalars(override_statement).all())
+        override_dict = {
+            (o.fixed_transaction_id, o.occurrence_date): o for o in overrides
+        }
+
+        now = datetime.now(timezone.utc)
+        current_year = now.year
+        current_month = now.month
+
+        projected = []
+
+        def add_occurrence(fixed, occurrence_dt, occurrence_str, year_val, month_val):
+            # Check override
+            override = override_dict.get((fixed.id, occurrence_str))
+            
+            amount = fixed.amount
+            status = "scheduled"
+            actual_dt = occurrence_dt
+            
+            if override:
+                status = override.status
+                if override.amount_override is not None:
+                    amount = override.amount_override
+                if override.actual_date is not None:
+                    actual_dt = override.actual_date
+
+            # Calculate unique virtual id
+            virtual_id = 100000000 + fixed.id * 10000 + (year_val - 2000) * 12 + month_val
+            
+            # Clamp to 0 if cancelled
+            if status == "cancelled":
+                amount = 0.0
+
+            projected.append(VirtualTransaction(
+                id=virtual_id,
+                user_id=fixed.user_id,
+                amount=amount,
+                description=fixed.description,
+                category=fixed.category,
+                merchant=fixed.merchant,
+                is_income=fixed.is_income,
+                trip_id=None,
+                date=actual_dt,
+                is_fixed=True,
+                fixed_id=fixed.id,
+                status=status,
+                occurrence_date=occurrence_str
+            ))
+
+        for fixed in fixed_list:
+            start_dt = fixed.start_date
+            
+            if fixed.frequency == "monthly":
+                y = start_dt.year
+                m = start_dt.month
+                while (y < current_year) or (y == current_year and m <= current_month):
+                    max_days = calendar.monthrange(y, m)[1]
+                    day = min(fixed.day_of_month, max_days)
+                    occurrence_dt = datetime(y, m, day, tzinfo=timezone.utc)
+                    
+                    if occurrence_dt.date() >= start_dt.date():
+                        if fixed.end_date and occurrence_dt.date() > fixed.end_date.date():
+                            break
+                        occurrence_str = f"{y:04d}-{m:02d}-{day:02d}"
+                        add_occurrence(fixed, occurrence_dt, occurrence_str, y, m)
+                    
+                    if m == 12:
+                        m = 1
+                        y += 1
+                    else:
+                        m += 1
+
+            elif fixed.frequency == "weekly":
+                curr = start_dt
+                last_day = calendar.monthrange(current_year, current_month)[1]
+                end_limit = datetime(current_year, current_month, last_day, 23, 59, 59, tzinfo=timezone.utc)
+                while curr <= end_limit:
+                    if fixed.end_date and curr.date() > fixed.end_date.date():
+                        break
+                    occurrence_str = curr.strftime("%Y-%m-%d")
+                    add_occurrence(fixed, curr, occurrence_str, curr.year, curr.month)
+                    curr += timedelta(days=7)
+
+            elif fixed.frequency == "yearly":
+                y = start_dt.year
+                m = start_dt.month
+                day = start_dt.day
+                while y <= current_year:
+                    max_days = calendar.monthrange(y, m)[1]
+                    d = min(day, max_days)
+                    occurrence_dt = datetime(y, m, d, tzinfo=timezone.utc)
+                    
+                    if occurrence_dt.date() >= start_dt.date():
+                        if fixed.end_date and occurrence_dt.date() > fixed.end_date.date():
+                            break
+                        occurrence_str = f"{y:04d}-{m:02d}-{d:02d}"
+                        add_occurrence(fixed, occurrence_dt, occurrence_str, y, m)
+                    y += 1
+
+        # Combine, sort descending by date
+        combined = list(manual_txs) + projected
+        combined.sort(key=lambda t: t.date, reverse=True)
+        return combined
 
     def create(self, payload: TransactionCreate) -> TransactionModel:
         if payload.trip_id is not None and not self._owns_trip(payload.trip_id):
             raise ValueError("Trip does not belong to this user")
 
+        category = payload.category.strip()
+        if category.lower() in AUTO_CATEGORY_VALUES:
+            suggestion = categorize(
+                self.session,
+                self.user,
+                payload.description,
+                merchant=payload.merchant,
+                is_income=payload.is_income,
+            )
+            category = suggestion["category"]
+
         transaction = TransactionModel(
             user_id=self.user.id if self.user is not None else None,
             amount=payload.amount,
             description=payload.description,
-            category=payload.category,
+            category=category,
             merchant=payload.merchant,
             is_income=payload.is_income,
             trip_id=payload.trip_id,
@@ -57,9 +193,22 @@ class TransactionRepository:
         if payload.trip_id is not None and not self._owns_trip(payload.trip_id):
             raise ValueError("Trip does not belong to this user")
 
+        new_category = payload.category.strip()
+        if new_category.lower() in {"", "auto"}:
+            new_category = categorize(
+                self.session,
+                self.user,
+                payload.description,
+                merchant=payload.merchant,
+                is_income=payload.is_income,
+            )["category"]
+        elif new_category != transaction.category:
+            # The user corrected the category — remember the mapping.
+            learn_correction(self.session, self.user, payload.merchant, payload.description, new_category)
+
         transaction.amount = payload.amount
         transaction.description = payload.description
-        transaction.category = payload.category
+        transaction.category = new_category
         transaction.merchant = payload.merchant
         transaction.is_income = payload.is_income
         transaction.trip_id = payload.trip_id
@@ -241,4 +390,111 @@ class TripRepository:
         if self.user is not None:
             statement = statement.where(TripModel.user_id == self.user.id)
         return self.session.scalars(statement).first()
+
+
+class FixedTransactionRepository:
+    def __init__(self, session: Session, username: str | None = None) -> None:
+        self.session = session
+        self.user = UserRepository(session).get_by_username(username) if username else None
+
+    def list(self) -> list[FixedTransactionModel]:
+        statement = select(FixedTransactionModel).order_by(FixedTransactionModel.start_date.desc())
+        if self.user is not None:
+            statement = statement.where(FixedTransactionModel.user_id == self.user.id)
+        return list(self.session.scalars(statement).all())
+
+    def create(self, payload: FixedTransactionCreate) -> FixedTransactionModel:
+        fixed = FixedTransactionModel(
+            user_id=self.user.id if self.user is not None else None,
+            amount=payload.amount,
+            description=payload.description,
+            category=payload.category,
+            merchant=payload.merchant,
+            is_income=payload.is_income,
+            frequency=payload.frequency,
+            day_of_month=payload.day_of_month,
+            start_date=payload.start_date if payload.start_date is not None else datetime.now(timezone.utc),
+            end_date=payload.end_date,
+        )
+        self.session.add(fixed)
+        self.session.flush()
+        self.session.refresh(fixed)
+        return fixed
+
+    def update(self, fixed_id: int, payload: FixedTransactionUpdate) -> FixedTransactionModel | None:
+        fixed = self._get_owned_fixed(fixed_id)
+        if fixed is None:
+            return None
+        fixed.amount = payload.amount
+        fixed.description = payload.description
+        fixed.category = payload.category
+        fixed.merchant = payload.merchant
+        fixed.is_income = payload.is_income
+        fixed.frequency = payload.frequency
+        fixed.day_of_month = payload.day_of_month
+        if payload.start_date is not None:
+            fixed.start_date = payload.start_date
+        fixed.end_date = payload.end_date
+        self.session.flush()
+        self.session.refresh(fixed)
+        return fixed
+
+    def delete(self, fixed_id: int) -> bool:
+        fixed = self._get_owned_fixed(fixed_id)
+        if fixed is None:
+            return False
+        self.session.delete(fixed)
+        self.session.flush()
+        return True
+
+    def _get_owned_fixed(self, fixed_id: int) -> FixedTransactionModel | None:
+        statement = select(FixedTransactionModel).where(FixedTransactionModel.id == fixed_id)
+        if self.user is not None:
+            statement = statement.where(FixedTransactionModel.user_id == self.user.id)
+        return self.session.scalars(statement).first()
+
+
+class FixedTransactionOverrideRepository:
+    def __init__(self, session: Session, username: str | None = None) -> None:
+        self.session = session
+        self.user = UserRepository(session).get_by_username(username) if username else None
+
+    def list(self) -> list[FixedTransactionOverrideModel]:
+        statement = select(FixedTransactionOverrideModel).join(FixedTransactionModel)
+        if self.user is not None:
+            statement = statement.where(FixedTransactionModel.user_id == self.user.id)
+        return list(self.session.scalars(statement).all())
+
+    def create_or_update(self, payload: FixedTransactionOverrideCreate) -> FixedTransactionOverrideModel:
+        statement = select(FixedTransactionModel).where(FixedTransactionModel.id == payload.fixed_transaction_id)
+        if self.user is not None:
+            statement = statement.where(FixedTransactionModel.user_id == self.user.id)
+        fixed = self.session.scalars(statement).first()
+        if fixed is None:
+            raise ValueError("Fixed transaction not found or access denied")
+
+        statement = select(FixedTransactionOverrideModel).where(
+            FixedTransactionOverrideModel.fixed_transaction_id == payload.fixed_transaction_id,
+            FixedTransactionOverrideModel.occurrence_date == payload.occurrence_date
+        )
+        override = self.session.scalars(statement).first()
+
+        if override is not None:
+            override.status = payload.status
+            override.actual_date = payload.actual_date
+            override.amount_override = payload.amount_override
+        else:
+            override = FixedTransactionOverrideModel(
+                fixed_transaction_id=payload.fixed_transaction_id,
+                occurrence_date=payload.occurrence_date,
+                status=payload.status,
+                actual_date=payload.actual_date,
+                amount_override=payload.amount_override
+            )
+            self.session.add(override)
+        
+        self.session.flush()
+        self.session.refresh(override)
+        return override
+
 

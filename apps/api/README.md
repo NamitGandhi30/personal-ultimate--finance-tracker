@@ -49,10 +49,45 @@ Invoke-WebRequest http://127.0.0.1:8000/health/db
 .venv\Scripts\python apps/api/scripts/apply_schema.py
 ```
 
+## AI categorization
+
+Transactions created with an empty category (or `"General"` / `"auto"`) are
+auto-categorized on the server. Resolution order: learned per-user rules (built
+from your category corrections) -> curated keyword rules -> AI provider ->
+`General`. The same provider config also powers receipt scanning
+(`app/ai_providers.py`).
+
+Pick the provider with `AI_PROVIDER` in `apps/api/.env`:
+
+```txt
+# one of: ollama | anthropic | gemini | openai | off
+# unset = auto-detect from whichever keys below are present,
+# tried in order: ollama, anthropic, gemini, openai
+AI_PROVIDER=ollama
+
+# Ollama (default; for Ollama Cloud set both):
+OLLAMA_BASE_URL=https://ollama.com/api
+OLLAMA_API_KEY=...
+OLLAMA_MODEL=llava
+
+# Claude:
+ANTHROPIC_API_KEY=...
+ANTHROPIC_MODEL=claude-opus-4-8   # or claude-haiku-4-5 for cheaper calls
+
+# Gemini:
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-flash
+
+# OpenAI:
+OPENAI_API_KEY=...
+OPENAI_MODEL=gpt-4.1-mini
+```
+
 Endpoints:
 
 - `GET /health`
 - `GET /health/db`
+- `POST /categorize` — suggest a category for a description/merchant
 - `GET /transactions`
 - `POST /transactions`
 - `GET /trips`

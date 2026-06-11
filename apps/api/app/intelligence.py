@@ -4,12 +4,12 @@ import json
 import math
 import os
 import re
-import urllib.error
-import urllib.request
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from app.ai_providers import configured_providers, generate
+from app.categorization import suggest_category_keywords
 from app.models import TransactionModel
 
 
@@ -149,7 +149,7 @@ def scan_receipt(
     text = (extracted_text or "").strip()
     ocr_available = False
     warnings: list[str] = []
-    ai_providers = _configured_ai_providers() if use_ai_parser else []
+    ai_providers = configured_providers() if use_ai_parser else []
     ai_provider: str | None = None
     ai_result: dict | None = None
 
@@ -159,10 +159,17 @@ def scan_receipt(
             warnings.append(ocr_warning)
 
     if ai_providers:
-        ai_result, ai_provider, ai_warnings = _try_ai_receipt_parse(ai_providers, image_base64, text)
+        prompt = f"{AI_RECEIPT_PROMPT}\nOCR text if any:\n{text or '(none)'}"
+        content, used_provider, ai_warnings = generate(prompt, image_base64, providers=ai_providers)
         warnings.extend(ai_warnings)
+        if content is not None:
+            ai_result = _normalize_ai_receipt(content)
+            if ai_result is not None:
+                ai_provider = used_provider
+            else:
+                warnings.append(f"AI parser ({used_provider}) returned no receipt details.")
     elif use_ai_parser:
-        warnings.append("AI parser is not configured. Set AI_RECEIPT_PROVIDER plus a provider key, or paste receipt text.")
+        warnings.append("AI parser is not configured. Set AI_PROVIDER plus a provider key, or paste receipt text.")
 
     parsed = ai_result or parse_receipt_text(text)
     confidence = parsed["confidence"]
@@ -204,7 +211,7 @@ def parse_receipt_text(text: str) -> dict:
     if merchant == "Receipt":
         warnings.append("Merchant was not obvious.")
 
-    category = _suggest_category(lower)
+    category = suggest_category_keywords(lower)
     description = merchant if merchant != "Receipt" else "Receipt expense"
     confidence = 0.35
     if amount > 0:
@@ -248,107 +255,6 @@ def _try_ocr(image_base64: str) -> tuple[str, bool, str | None]:
         return "", False, f"Local OCR engine is unavailable: {message}"
 
 
-def _configured_ai_providers() -> list[str]:
-    requested = os.getenv("AI_RECEIPT_PROVIDER", "").strip().lower()
-    if requested in {"openai", "gemini", "ollama"}:
-        return [requested]
-    if requested in {"on", "auto", "true"}:
-        requested = ""
-    if requested in {"off", "none", "false"}:
-        return []
-
-    providers: list[str] = []
-    if os.getenv("OLLAMA_API_KEY") or os.getenv("OLLAMA_BASE_URL"):
-        providers.append("ollama")
-    if os.getenv("GEMINI_API_KEY"):
-        providers.append("gemini")
-    if os.getenv("OPENAI_API_KEY"):
-        providers.append("openai")
-    return providers
-
-
-def _try_ai_receipt_parse(providers: list[str], image_base64: str | None, text: str) -> tuple[dict | None, str | None, list[str]]:
-    warnings: list[str] = []
-    for provider in providers:
-        try:
-            if provider == "openai":
-                content = _call_openai_receipt(image_base64, text)
-            elif provider == "gemini":
-                content = _call_gemini_receipt(image_base64, text)
-            else:
-                content = _call_ollama_receipt(image_base64, text)
-            result = _normalize_ai_receipt(content)
-            if result is not None:
-                return result, provider, warnings
-            warnings.append(f"AI parser ({provider}) returned no receipt details.")
-        except Exception as exc:
-            message = str(exc).strip() or exc.__class__.__name__
-            warnings.append(f"AI parser ({provider}) failed: {message}")
-    return None, None, warnings
-
-
-def _call_openai_receipt(image_base64: str | None, text: str) -> str:
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
-        raise ValueError("OPENAI_API_KEY is not configured")
-
-    content: list[dict] = [{"type": "input_text", "text": f"{AI_RECEIPT_PROMPT}\nOCR text if any:\n{text or '(none)'}"}]
-    if image_base64:
-        content.append({"type": "input_image", "image_url": image_base64, "detail": "high"})
-
-    payload = {
-        "model": os.getenv("OPENAI_RECEIPT_MODEL", "gpt-4.1-mini"),
-        "input": [{"role": "user", "content": content}],
-    }
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    response = _post_json(
-        f"{base_url}/responses",
-        payload,
-        {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-    )
-    return str(response.get("output_text") or _deep_find_text(response))
-
-
-def _call_gemini_receipt(image_base64: str | None, text: str) -> str:
-    api_key = os.getenv("GEMINI_API_KEY", "")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY is not configured")
-
-    parts: list[dict] = [{"text": f"{AI_RECEIPT_PROMPT}\nOCR text if any:\n{text or '(none)'}"}]
-    if image_base64:
-        mime_type, data = _split_data_url(image_base64)
-        parts.insert(0, {"inline_data": {"mime_type": mime_type, "data": data}})
-
-    model = os.getenv("GEMINI_RECEIPT_MODEL", "gemini-2.5-flash")
-    response = _post_json(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
-        {"contents": [{"parts": parts}]},
-        {"Content-Type": "application/json"},
-    )
-    return str(_deep_find_text(response))
-
-
-def _call_ollama_receipt(image_base64: str | None, text: str) -> str:
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/api").rstrip("/")
-    model = os.getenv("OLLAMA_RECEIPT_MODEL", "llava")
-    headers = {"Content-Type": "application/json"}
-    api_key = os.getenv("OLLAMA_API_KEY", "")
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-
-    payload: dict = {
-        "model": model,
-        "prompt": f"{AI_RECEIPT_PROMPT}\nOCR text if any:\n{text or '(none)'}",
-        "stream": False,
-        "format": "json",
-    }
-    if image_base64:
-        payload["images"] = [_split_data_url(image_base64)[1]]
-
-    response = _post_json(f"{base_url}/generate", payload, headers)
-    return str(response.get("response") or _deep_find_text(response))
-
-
 def _normalize_ai_receipt(content: str) -> dict | None:
     match = re.search(r"\{.*\}", content, flags=re.DOTALL)
     if not match:
@@ -369,35 +275,6 @@ def _normalize_ai_receipt(content: str) -> dict | None:
         "confidence": round(max(0.0, min(confidence, 0.98)), 2),
         "warnings": [str(item) for item in warnings],
     }
-
-
-def _post_json(url: str, payload: dict, headers: dict[str, str]) -> dict:
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=25) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-def _split_data_url(value: str) -> tuple[str, str]:
-    if value.startswith("data:") and "," in value:
-        metadata, data = value.split(",", 1)
-        mime_match = re.match(r"data:([^;]+)", metadata)
-        return (mime_match.group(1) if mime_match else "image/jpeg", data)
-    return "image/jpeg", value
-
-
-def _deep_find_text(value: object) -> str:
-    if isinstance(value, dict):
-        if isinstance(value.get("text"), str):
-            return value["text"]
-        return " ".join(_deep_find_text(item) for item in value.values()).strip()
-    if isinstance(value, list):
-        return " ".join(_deep_find_text(item) for item in value).strip()
-    return ""
 
 
 def _daily_spend(transactions: list[TransactionModel]) -> list[DailySpend]:
@@ -477,18 +354,6 @@ def _detect_merchant(text: str) -> str:
         if not re.search(r"\d{3,}", line):
             return line[:120]
     return "Receipt"
-
-
-def _suggest_category(value: str) -> str:
-    rules = {
-        "Food": ["restaurant", "cafe", "swiggy", "zomato", "food", "meal", "pizza"],
-        "Groceries": ["grocery", "mart", "dmart", "bigbasket", "supermarket"],
-        "Transport": ["fuel", "petrol", "uber", "ola", "taxi", "metro"],
-        "Utilities": ["electricity", "water", "internet", "mobile", "recharge"],
-        "Shopping": ["amazon", "flipkart", "store", "mall", "fashion"],
-        "Healthcare": ["pharmacy", "hospital", "clinic", "medicine"],
-    }
-    return next((category for category, words in rules.items() if any(word in value for word in words)), "General")
 
 
 def _mean(values: list[float]) -> float:

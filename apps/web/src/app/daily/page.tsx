@@ -16,6 +16,10 @@ type Transaction = {
   date: string;
   is_income: boolean;
   trip_id?: number | null;
+  is_fixed?: boolean;
+  fixed_id?: number | null;
+  status?: string;
+  occurrence_date?: string | null;
 };
 
 type CreateTransaction = Omit<Transaction, "id" | "date"> & { date?: string };
@@ -281,10 +285,12 @@ export default function DailyPage() {
     setTransactions((current) => [optimisticTransaction, ...current]);
 
     try {
+      // Send an empty category so the server auto-categorizes (learned rules +
+      // AI); the optimistic row keeps the local keyword guess until then.
       const response = await authFetch("/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, category: payload.is_income ? "Income" : "" }),
       });
       if (!response.ok) throw new Error("Failed to save transaction");
       const saved = (await response.json()) as Transaction;
@@ -325,6 +331,30 @@ export default function DailyPage() {
       setApiStatus("online");
     } catch {
       setTransactions(previousTransactions);
+      setApiStatus("offline");
+    }
+  }
+
+  async function saveTransactionOverride(fixedId: number, occurrenceDate: string, status: string, actualDate?: string | null) {
+    try {
+      const response = await authFetch("/fixed-transactions/overrides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fixed_transaction_id: fixedId,
+          occurrence_date: occurrenceDate,
+          status,
+          actual_date: actualDate,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to save override");
+
+      const res = await authFetch("/transactions", { cache: "no-store" });
+      if (res.ok) {
+        setTransactions((await res.json()) as Transaction[]);
+      }
+      setApiStatus("online");
+    } catch {
       setApiStatus("offline");
     }
   }
@@ -508,6 +538,7 @@ export default function DailyPage() {
                   tripNames={tripNames}
                   onSave={updateTransaction}
                   onDelete={deleteTransaction}
+                  onSaveOverride={saveTransactionOverride}
                 />
               ))
             )}

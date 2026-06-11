@@ -332,6 +332,9 @@ export function AuthGate({
           <Link href="/daily" className={`nav-item ${pathname === "/daily" ? "active" : ""}`}>
             Transactions
           </Link>
+          <Link href="/fixed" className={`nav-item ${pathname === "/fixed" ? "active" : ""}`}>
+            Fixed Auto-Pays
+          </Link>
           <Link href="/trips" className={`nav-item ${pathname === "/trips" ? "active" : ""}`}>
             Trips
           </Link>
