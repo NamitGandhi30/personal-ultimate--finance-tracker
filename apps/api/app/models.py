@@ -82,6 +82,30 @@ class FixedTransactionModel(Base):
     )
 
 
+class ChannelLinkModel(Base):
+    """Links a chat-platform identity (Telegram/WhatsApp/Notion) to a PUFT user.
+
+    A pending row has a `code` and no `external_id`; once the user claims the
+    code from a platform, `platform` + `external_id` are filled and
+    `verified` flips to True.
+    """
+
+    __tablename__ = "channel_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    platform: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    external_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    code: Mapped[str | None] = mapped_column(String(12), nullable=True, index=True)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
 class CategoryRuleModel(Base):
     """A learned merchant/keyword -> category mapping from user corrections."""
 

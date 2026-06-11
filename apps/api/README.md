@@ -83,11 +83,84 @@ OPENAI_API_KEY=...
 OPENAI_MODEL=gpt-4.1-mini
 ```
 
+## Chat integrations (Telegram / WhatsApp / Notion)
+
+Users connect a chat app once, then log expenses by texting the bot or sending a
+receipt photo. All three funnel through one ingestion pipeline
+(`app/channels/ingestion.py`) that reuses categorization and receipt scanning.
+
+**Linking:** in the app, call `POST /channels/link/start` (authenticated) to get
+a 6-character code, then send `link <code>` from the chat platform. Codes expire
+in 15 minutes. `GET /channels/links` lists connected platforms;
+`DELETE /channels/links/{platform}` disconnects one.
+
+Once linked, a user can send:
+
+- `250 lunch at swiggy` → logs an expense (server auto-categorizes)
+- `income 50000 salary` → logs income
+- a receipt photo → OCR/AI scan → logged
+- `balance` → this month's summary · `undo` → remove last entry · `help`
+
+### Telegram
+
+```txt
+TELEGRAM_BOT_TOKEN=...           # from @BotFather
+TELEGRAM_BOT_USERNAME=your_bot   # used in linking instructions
+TELEGRAM_WEBHOOK_SECRET=...      # any random string
+```
+
+Register the webhook (public HTTPS host required):
+
+```bash
+curl "https://api.telegram.org/bot<TOKEN>/setWebhook" \
+  -d url="https://YOUR_HOST/channels/telegram/webhook" \
+  -d secret_token="<TELEGRAM_WEBHOOK_SECRET>"
+```
+
+### WhatsApp (Meta Cloud API)
+
+```txt
+WHATSAPP_TOKEN=...               # permanent access token
+WHATSAPP_PHONE_NUMBER_ID=...
+WHATSAPP_VERIFY_TOKEN=...        # any string, matches dashboard
+WHATSAPP_APP_SECRET=...          # for X-Hub-Signature-256 verification
+WHATSAPP_GRAPH_VERSION=v21.0     # optional
+```
+
+Set the callback URL to `https://YOUR_HOST/channels/whatsapp/webhook` with the
+same verify token and subscribe to the `messages` field.
+
+### Notion (poll-based)
+
+Notion has no reliable per-row push, so PUFT polls a shared database.
+
+```txt
+NOTION_TOKEN=...                 # internal integration token
+NOTION_DATABASE_ID=...
+NOTION_SYNC_SECRET=...           # protects the sync trigger
+# Optional property-name overrides (defaults shown):
+# NOTION_DESCRIPTION_PROPERTY=Description  NOTION_AMOUNT_PROPERTY=Amount
+# NOTION_MERCHANT_PROPERTY=Merchant  NOTION_TYPE_PROPERTY=Type
+# NOTION_CODE_PROPERTY=Code  NOTION_STATUS_PROPERTY=Status  NOTION_LOGGED_VALUE=Logged
+```
+
+Database properties: `Description` (title), `Amount` (number), `Merchant`
+(text), `Type` (select: Expense/Income), `Code` (text), `Status` (select:
+New/Logged). Trigger sync from cron:
+
+```bash
+curl -X POST https://YOUR_HOST/channels/notion/sync -H "X-Sync-Secret: <NOTION_SYNC_SECRET>"
+```
+
 Endpoints:
 
 - `GET /health`
 - `GET /health/db`
 - `POST /categorize` — suggest a category for a description/merchant
+- `POST /receipts/scan` — OCR/AI receipt parsing
+- `GET /insights/forecast` · `GET /insights/history`
+- `POST /channels/link/start` · `GET /channels/links` · `DELETE /channels/links/{platform}`
+- `POST /channels/telegram/webhook` · `GET|POST /channels/whatsapp/webhook` · `POST /channels/notion/sync`
 - `GET /transactions`
 - `POST /transactions`
 - `GET /trips`

@@ -63,6 +63,20 @@ class TransactionRead(TransactionCreate):
     occurrence_date: str | None = None
 
 
+class ChannelLinkStartResponse(BaseModel):
+    code: str
+    expires_in_seconds: int
+    instructions: dict[str, str]
+
+
+class ChannelLinkRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    platform: str | None
+    display_name: str | None
+    created_at: datetime
+
+
 class CategorizeRequest(BaseModel):
     description: str = Field(min_length=1, max_length=240)
     merchant: str = Field(default="", max_length=120)

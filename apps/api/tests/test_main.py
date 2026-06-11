@@ -1,18 +1,6 @@
-import os
-from pathlib import Path
-
 from fastapi.testclient import TestClient
 
-test_db = Path("test_puft.db")
-if test_db.exists():
-    test_db.unlink()
-os.environ["DATABASE_URL"] = f"sqlite:///{test_db}"
-os.environ["AUTH_USERNAME"] = "admin"
-os.environ["AUTH_PASSWORD"] = "admin"
-os.environ["AUTH_SECRET"] = "test-secret-that-is-long-enough-for-suite"
-os.environ["AI_PROVIDER"] = "off"
-
-from app.main import app
+from app.main import app  # test env is configured in conftest.py before this import
 
 
 def auth_headers(client: TestClient) -> dict[str, str]:

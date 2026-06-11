@@ -154,9 +154,8 @@ def scan_receipt(
     ai_result: dict | None = None
 
     if image_base64 and not text:
-        text, ocr_available, ocr_warning = _try_ocr(image_base64)
-        if ocr_warning:
-            warnings.append(ocr_warning)
+        text, ocr_available, ocr_warnings = _run_ocr(image_base64)
+        warnings.extend(ocr_warnings)
 
     if ai_providers:
         prompt = f"{AI_RECEIPT_PROMPT}\nOCR text if any:\n{text or '(none)'}"
@@ -199,11 +198,54 @@ def scan_receipt(
     }
 
 
+_TOTAL_KEYWORDS = (
+    "grand total",
+    "amount payable",
+    "net payable",
+    "net amount",
+    "amount due",
+    "balance due",
+    "total amount",
+    "total",
+    "amount paid",
+)
+_AMOUNT_PATTERN = re.compile(r"(?<![0-9.])([0-9]{1,3}(?:,[0-9]{2,3})+(?:\.[0-9]{1,2})?|[0-9]+(?:\.[0-9]{1,2})?)(?![0-9.])")
+_DATE_TIME_PATTERN = re.compile(r"\b\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}\b|\b\d{1,2}:\d{2}(?::\d{2})?\b")
+
+
+def _plausible_amounts(text: str) -> list[float]:
+    candidates = []
+    for raw in _AMOUNT_PATTERN.findall(_DATE_TIME_PATTERN.sub(" ", text)):
+        digits = raw.replace(",", "")
+        # Long digit runs without a decimal point are phone/GST/invoice numbers, not money.
+        if "." not in digits and len(digits) > 6:
+            continue
+        value = float(digits)
+        if 0 < value <= 1_000_000:
+            candidates.append(value)
+    return candidates
+
+
+def _detect_amount(text: str) -> float:
+    keyword_amounts: list[float] = []
+    for line in text.splitlines():
+        lower = line.lower()
+        if "subtotal" in lower or "sub total" in lower or "sub-total" in lower:
+            continue
+        if any(keyword in lower for keyword in _TOTAL_KEYWORDS):
+            amounts = _plausible_amounts(line)
+            if amounts:
+                keyword_amounts.append(max(amounts))
+    if keyword_amounts:
+        return max(keyword_amounts)
+    amounts = _plausible_amounts(text)
+    return max(amounts) if amounts else 0
+
+
 def parse_receipt_text(text: str) -> dict:
     warnings: list[str] = []
     lower = text.lower()
-    amounts = [float(match) for match in re.findall(r"(?:rs\.?|inr|total|amount|₹)?\s*([0-9]+(?:\.[0-9]{1,2})?)", lower)]
-    amount = max(amounts) if amounts else 0
+    amount = _detect_amount(text)
     if amount <= 0:
         warnings.append("Could not detect a payable total.")
 
@@ -231,28 +273,118 @@ def parse_receipt_text(text: str) -> dict:
     }
 
 
-def _try_ocr(image_base64: str) -> tuple[str, bool, str | None]:
+# RapidOCR loads its ONNX models once per process (~1-2s); cache the engine.
+_rapidocr_engine = None
+_rapidocr_error: str | None = None
+
+
+def _get_rapidocr():
+    global _rapidocr_engine, _rapidocr_error
+    if _rapidocr_engine is None and _rapidocr_error is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+
+            _rapidocr_engine = RapidOCR()
+        except Exception as exc:
+            _rapidocr_error = str(exc).strip() or exc.__class__.__name__
+    return _rapidocr_engine
+
+
+def _decode_receipt_image(image_base64: str):
+    from PIL import Image, ImageOps
+
+    payload = image_base64.split(",", 1)[-1]
+    image = ImageOps.exif_transpose(Image.open(io.BytesIO(base64.b64decode(payload))))
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+    # Recognition quality drops sharply when text is under ~20px tall; upscale small photos.
+    longest = max(image.size)
+    if longest < 960:
+        scale = 960 / longest
+        image = image.resize((round(image.width * scale), round(image.height * scale)), Image.LANCZOS)
+    return image
+
+
+def _run_ocr(image_base64: str) -> tuple[str, bool, list[str]]:
+    warnings: list[str] = []
     try:
-        from PIL import Image, ImageOps
+        image = _decode_receipt_image(image_base64)
+    except ImportError:
+        return "", False, ["Local OCR dependencies are not installed. Run pip install -r apps/api/requirements.txt."]
+    except (base64.binascii.Error, OSError, ValueError):
+        return "", False, ["Could not read this receipt image. Try a clearer JPG/PNG or paste receipt text."]
+
+    text, warning = _rapidocr_text(image)
+    if text is not None:
+        if not text:
+            warnings.append("No readable text was found on this receipt. Try a sharper, well-lit photo.")
+        return text, True, warnings
+    if warning:
+        warnings.append(warning)
+
+    text, warning = _tesseract_text(image)
+    if text is not None:
+        return text, True, warnings
+    if warning:
+        warnings.append(warning)
+    return "", False, warnings
+
+
+def _rapidocr_text(image) -> tuple[str | None, str | None]:
+    engine = _get_rapidocr()
+    if engine is None:
+        return None, f"RapidOCR is unavailable: {_rapidocr_error}"
+    try:
+        import numpy as np
+
+        result, _ = engine(np.array(image))
+    except Exception as exc:
+        return None, f"RapidOCR failed on this image: {str(exc).strip() or exc.__class__.__name__}"
+    return _boxes_to_lines(result or []), None
+
+
+def _boxes_to_lines(result: list) -> str:
+    """Rebuild reading order from OCR boxes: group fragments that share a baseline into one line."""
+    entries = []
+    for box, text, score in result:
+        text = str(text).strip()
+        if not text or float(score) < 0.5:
+            continue
+        xs = [point[0] for point in box]
+        ys = [point[1] for point in box]
+        entries.append(((min(ys) + max(ys)) / 2, max(ys) - min(ys), min(xs), text))
+    if not entries:
+        return ""
+
+    entries.sort(key=lambda entry: (entry[0], entry[2]))
+    heights = sorted(entry[1] for entry in entries)
+    median_height = heights[len(heights) // 2] or 1
+
+    lines: list[list[tuple[float, str]]] = []
+    line_y = None
+    for y_center, _, x_left, text in entries:
+        if line_y is None or y_center - line_y > median_height * 0.6:
+            lines.append([])
+        lines[-1].append((x_left, text))
+        line_y = y_center
+    return "\n".join(" ".join(text for _, text in sorted(line)) for line in lines)
+
+
+def _tesseract_text(image) -> tuple[str | None, str | None]:
+    try:
         import pytesseract
     except ImportError:
-        return "", False, "Local OCR dependencies are not installed. Run pip install -r apps/api/requirements.txt."
+        return None, None
 
     try:
         tesseract_cmd = os.getenv("TESSERACT_CMD", "").strip()
         if tesseract_cmd:
             pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
         pytesseract.get_tesseract_version()
-        payload = image_base64.split(",", 1)[-1]
-        image = ImageOps.exif_transpose(Image.open(io.BytesIO(base64.b64decode(payload))))
-        if image.mode not in {"L", "RGB"}:
-            image = image.convert("RGB")
-        return pytesseract.image_to_string(image).strip(), True, None
-    except (base64.binascii.Error, OSError):
-        return "", False, "Could not read this receipt image. Try a clearer JPG/PNG or paste receipt text."
+        return pytesseract.image_to_string(image).strip(), None
     except Exception as exc:
         message = str(exc).strip() or exc.__class__.__name__
-        return "", False, f"Local OCR engine is unavailable: {message}"
+        return None, f"Tesseract fallback is unavailable: {message}"
 
 
 def _normalize_ai_receipt(content: str) -> dict | None:

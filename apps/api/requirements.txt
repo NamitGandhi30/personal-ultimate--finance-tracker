@@ -5,3 +5,7 @@ SQLAlchemy==2.0.45
 psycopg[binary]==3.3.2
 python-dotenv==1.2.2
 anthropic>=0.92.0
+pillow>=10.0.0
+rapidocr-onnxruntime>=1.2.3
+# Optional fallback OCR engine; needs the system tesseract binary (set TESSERACT_CMD).
+pytesseract>=0.3.13

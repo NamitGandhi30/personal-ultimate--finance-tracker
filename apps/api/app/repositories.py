@@ -3,9 +3,19 @@ from datetime import datetime, timezone
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+import secrets
+from datetime import timedelta
+
 from app.auth import AUTH_PASSWORD, AUTH_USERNAME, hash_password, verify_password
 from app.categorization import AUTO_CATEGORY_VALUES, categorize, learn_correction
-from app.models import TransactionModel, TripModel, UserModel, FixedTransactionModel, FixedTransactionOverrideModel
+from app.models import (
+    ChannelLinkModel,
+    FixedTransactionModel,
+    FixedTransactionOverrideModel,
+    TransactionModel,
+    TripModel,
+    UserModel,
+)
 from app.schemas import RegisterRequest, TransactionCreate, TransactionTripUpdate, TransactionUpdate, TripCreate, TripUpdate, FixedTransactionCreate, FixedTransactionUpdate, FixedTransactionOverrideCreate
 
 
@@ -498,3 +508,107 @@ class FixedTransactionOverrideRepository:
         return override
 
 
+LINK_CODE_TTL = timedelta(minutes=15)
+# Avoid easily-confused characters (0/O, 1/I) in the human-typed code.
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+
+
+class ChannelLinkRepository:
+    """Manages chat-platform identity links and pending link codes."""
+
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def start_link(self, user: UserModel, length: int = 6) -> str:
+        """Issue a fresh pending link code for a user, replacing any prior one."""
+        self.session.query(ChannelLinkModel).filter(
+            ChannelLinkModel.user_id == user.id,
+            ChannelLinkModel.verified.is_(False),
+        ).delete()
+
+        code = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(length))
+        self.session.add(ChannelLinkModel(user_id=user.id, code=code, verified=False))
+        self.session.flush()
+        return code
+
+    def claim_code(self, code: str, platform: str, external_id: str, display_name: str | None) -> UserModel | None:
+        """Bind a platform identity to the user who owns this pending code."""
+        normalized = code.strip().upper()
+        pending = self.session.scalars(
+            select(ChannelLinkModel).where(
+                ChannelLinkModel.code == normalized,
+                ChannelLinkModel.verified.is_(False),
+            )
+        ).first()
+        if pending is None:
+            return None
+        if _aware(pending.created_at) < datetime.now(timezone.utc) - LINK_CODE_TTL:
+            self.session.delete(pending)
+            self.session.flush()
+            return None
+
+        user = self.session.get(UserModel, pending.user_id)
+        if user is None:
+            return None
+
+        # Re-link: if this identity was already linked, repoint it to the new user.
+        existing = self.session.scalars(
+            select(ChannelLinkModel).where(
+                ChannelLinkModel.platform == platform,
+                ChannelLinkModel.external_id == external_id,
+                ChannelLinkModel.verified.is_(True),
+            )
+        ).first()
+        if existing is not None:
+            existing.user_id = pending.user_id
+            existing.display_name = display_name
+            self.session.delete(pending)
+        else:
+            pending.platform = platform
+            pending.external_id = external_id
+            pending.display_name = display_name
+            pending.code = None
+            pending.verified = True
+
+        self.session.flush()
+        return user
+
+    def resolve_user(self, platform: str, external_id: str) -> UserModel | None:
+        link = self.session.scalars(
+            select(ChannelLinkModel).where(
+                ChannelLinkModel.platform == platform,
+                ChannelLinkModel.external_id == external_id,
+                ChannelLinkModel.verified.is_(True),
+            )
+        ).first()
+        if link is None:
+            return None
+        return self.session.get(UserModel, link.user_id)
+
+    def list_for_user(self, user: UserModel) -> list[ChannelLinkModel]:
+        return list(
+            self.session.scalars(
+                select(ChannelLinkModel).where(
+                    ChannelLinkModel.user_id == user.id,
+                    ChannelLinkModel.verified.is_(True),
+                )
+            ).all()
+        )
+
+    def unlink(self, user: UserModel, platform: str) -> bool:
+        deleted = (
+            self.session.query(ChannelLinkModel)
+            .filter(
+                ChannelLinkModel.user_id == user.id,
+                ChannelLinkModel.platform == platform,
+                ChannelLinkModel.verified.is_(True),
+            )
+            .delete()
+        )
+        self.session.flush()
+        return bool(deleted)
+
+
+def _aware(value: datetime) -> datetime:
+    """SQLite round-trips naive datetimes; treat those as UTC."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)

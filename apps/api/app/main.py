@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.auth import create_token, require_auth
 from app.categorization import categorize
+from app.channels.linking import router as channels_link_router
+from app.channels.notion import router as notion_router
+from app.channels.telegram import router as telegram_router
+from app.channels.whatsapp import router as whatsapp_router
 from app.database import check_db, database_kind, init_db, session_scope
 from app.intelligence import build_forecast, build_historical_insights, scan_receipt
 from app.repositories import TransactionRepository, TripRepository, UserRepository, FixedTransactionRepository, FixedTransactionOverrideRepository
@@ -59,6 +63,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+app.include_router(channels_link_router)
+app.include_router(telegram_router)
+app.include_router(whatsapp_router)
+app.include_router(notion_router)
 
 
 def get_session() -> Iterator[Session]:
