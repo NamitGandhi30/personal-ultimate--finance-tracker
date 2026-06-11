@@ -5,6 +5,7 @@ import Link from "next/link";
 import { AuthGate, useAuth } from "./auth-client";
 import { EditableTransactionRow, TransactionPayload } from "./transaction-row";
 import { CustomDatePicker } from "./custom-date-picker";
+import { ReceiptScanner } from "./receipt-scanner";
 import "./workspace.css";
 
 type Transaction = {
@@ -412,7 +413,23 @@ export default function Home() {
               <strong>{isLoading ? "..." : formatMoney(generalTransactions.filter((item) => !item.is_income).reduce((sum, item) => sum + item.amount, 0))}</strong>
             </div>
           </Link>
+          <Link className="panel action-panel" href="/insights">
+            <div>
+              <p className="eyebrow">Insights</p>
+              <h2>Forecast & history</h2>
+            </div>
+            <div className="action-panel-metrics">
+              <span>Spending forecast</span>
+              <strong>Scan receipts</strong>
+            </div>
+          </Link>
         </section>
+
+        <ReceiptScanner<Transaction>
+          authFetch={authFetch}
+          trips={trips}
+          onAdded={(saved) => setTransactions((current) => [saved, ...current])}
+        />
 
         {/* 4 column layouts */}
         <div className="dashboard-four-cols">
